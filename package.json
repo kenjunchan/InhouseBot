@@ -1,0 +1,24 @@
+{
+  "name": "inhousebot",
+  "version": "1.0.0",
+  "description": "A discord.js bot to schdule inhouse matches",
+  "main": "inhouseBot.js",
+  "scripts": {
+    "test": "%test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kenjunchan/InhouseBot.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/kenjunchan/InhouseBot/issues"
+  },
+  "homepage": "https://github.com/kenjunchan/InhouseBot#readme",
+  "dependencies": {
+    "discord.js": "^12.5.1",
+    "nedb": "^1.8.0",
+    "node": "^15.3.0"
+  }
+}
