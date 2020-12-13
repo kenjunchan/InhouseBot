@@ -2,17 +2,30 @@ const Discord = require('discord.js')
 const client = new Discord.Client();
 client.login("") //Discord Token Here
 
+const Datastore = require('nedb');
+
+//Load Database
+const MatchesDatabase = new Datastore('MatchesDatastore.db');
+MatchesDatabase.loadDatabase();
+
+const PlayersDatabase = new Datastore('PlayersDatastore.db');
+PlayersDatabase.loadDatabase();
+
+const dbCompactInterval = 60000
+
 client.on('ready', () => {
 	client.user.setActivity("Test Bot")
 	listAllConnectedServersAndChannels()
 	console.log("DiscordBot Started")
+	MatchesDatabase.persistence.setAutocompactionInterval(dbCompactInterval)
+	PlayersDatabase.persistence.setAutocompactionInterval(dbCompactInterval)
 })
 
 client.on('message', (receivedMessage) => {
 	if (receivedMessage.author == client.user) {
 		return
 	}
-	else if (receivedMessage.content.startsWith("%")) { //%command
+	else if (receivedMessage.content.startsWith("%")) { //% command
 		processCommand(receivedMessage)
 	}
 })
@@ -34,7 +47,7 @@ function processCommand(receivedMessage) {
 	let splitCommand = fullCommand.split(" ") // Split the message up in to pieces for each space
 	let primaryCommand = splitCommand[0].toLowerCase() // The first word directly after the exclamation is the command
 	let arguments = splitCommand.slice(1) // All other words are arguments/parameters/options for the command
-    let re = new RegExp("^[a-zA-Z0-9]*$")
+	let re = new RegExp("^[a-zA-Z0-9]*$")
 
 	if (fullCommand == null || fullCommand.startsWith("%", 0) || !re.test(primaryCommand)) {
 		return;
@@ -42,15 +55,465 @@ function processCommand(receivedMessage) {
 	else {
 		console.log("Command Received from User: " + receivedMessage.author.id + " \n --Command: " + primaryCommand + " with Arguments: " + arguments)
 		switch (primaryCommand) {
-            case "test":
-                testCommand(arguments, receivedMessage);
-                break;
-            case "":
+			case "test":
+				testCommand(arguments, receivedMessage);
+				break;
+			case "create":
+				createMatch(arguments, receivedMessage);
+				break;
+			case "players":
+				printUserRoles(arguments, receivedMessage);
+				break;
 		}
-    }
-    
+	}
+
 }
 
-function testCommand(arguments, receivedMessage){
-    receivedMessage.channel.send("Hello World");
+async function createMatch(arguments, receivedMessage) {
+	if (!checkCreateMatchArguments(arguments, receivedMessage)) {
+		console.log("invalid arguments");
+		return;
+	}
+	const embedMessage = new Discord.MessageEmbed()
+		.setAuthor("In-House Bot")
+		.setDescription("Processing Match...")
+		.setFooter("React to sign-up for role, click on ❌ to unsign-up")
+	let embedMessageTitle = "";
+	if (arguments[0] == "fun") {
+		embedMessageTitle += "Fun In-House @ "
+	}
+	else {
+		embedMessageTitle += "Serious In-House @ "
+	}
+	//time here
+	embedMessageTitle += arguments[1];
+	if (arguments[2] == "am") {
+		embedMessageTitle += " a.m."
+	}
+	else {
+		embedMessageTitle += " p.m."
+	}
+	embedMessage.setTitle(embedMessageTitle)
+
+	const msg = await receivedMessage.channel.send(embedMessage);
+	msg.react('🇹')
+		.then(() => msg.react('🇯'))
+		.then(() => msg.react('🇲'))
+		.then(() => msg.react('🇧'))
+		.then(() => msg.react('🇸'))
+		.then(() => msg.react('❌'))
+		.catch(() => console.error('One of the emojis failed to react.'));
+	await addMatchToDatabase(msg, embedMessage, arguments, receivedMessage)
+	await receivedMessage.delete()
+
+	const filter = (reaction, user) => { return ['🇹', '🇯', '🇲', '🇧', '🇸', '❌'].includes(reaction.emoji.name) && user.id != client.user.id };
+	const collector = msg.createReactionCollector(filter, {});
+	collector.on('collect', (reaction, user) => {
+		console.log("collected reaction: " + reaction.emoji.name)
+		switch (reaction.emoji.name) {
+			case "🇹":
+				console.log("top selected from: " + user.id)
+				addUserToRole(msg, embedMessage, user, "top", receivedMessage);
+				break;
+			case "🇯":
+				console.log("jungle selected from: " + user.id)
+				addUserToRole(msg, embedMessage, user, "jungle", receivedMessage);
+				break;
+			case "🇲":
+				console.log("mid selected from: " + user.id)
+				addUserToRole(msg, embedMessage, user, "mid", receivedMessage);
+				break;
+			case "🇧":
+				console.log("bot selected from: " + user.id)
+				addUserToRole(msg, embedMessage, user, "bot", receivedMessage);
+				break;
+			case "🇸":
+				console.log("support selected from: " + user.id)
+				addUserToRole(msg, embedMessage, user, "support", receivedMessage);
+				break;
+			case "❌":
+				console.log("cancel selected from: " + user.id)
+				removeUserFromAllRoles(msg, embedMessage, user, receivedMessage);
+				removeReactions(msg, user.id);
+				break;
+			default:
+				console.log("something went wrong with collecting reactions")
+				break;
+		}
+
+	});
+}
+
+async function removeReactions(msg, user_id) {
+	const userReactions = msg.reactions.cache.filter(reaction => reaction.users.cache.has(user_id));
+	try {
+		for (const reaction of userReactions.values()) {
+			await reaction.users.remove(user_id);
+		}
+	} catch (error) {
+		console.error('Failed to remove reactions.');
+	}
+}
+
+function checkCreateMatchArguments(arguments, receivedMessage) {
+	if (arguments[0].toLowerCase() != "fun" && arguments[0].toLowerCase() != "serious") {
+		return false;
+	}
+	//else if(arguments ) check valid time here at arguments[1]
+	else if (arguments[2].toLowerCase() != "am" && arguments[2].toLowerCase() != "pm") {
+		return false;
+	}
+	return true;
+}
+
+async function addMatchToDatabase(msg, embedMessage, arguments, receivedMessage) {
+	let currentDate = new Date();
+	let isSerious = true;
+	if (arguments[0].toLowerCase() == "fun"){
+		isSerious = false;
+	}
+	MatchesDatabase.findOne({ match_id: 0 }, function (err, data) {
+		if (data != null) {
+			let last_match_id = data.LAST_MATCH_ID;
+			MatchesDatabase.insert({
+				match_id: last_match_id + 1, creator_id: receivedMessage.author.id, message_id: msg.id, date: currentDate, serious: isSerious, number_of_players: 0,
+				top: [], jungle: [], mid: [], bot: [], support: [],
+				team1: [], team2: []
+			});
+			MatchesDatabase.update({ match_id: 0 }, { $inc: { LAST_MATCH_ID: 1 } }, { multi: false }, function (err, numReplaced) { console.log("Increased LAST_MATCH_ID by 1") });
+			let embedDescription = "";
+			embedDescription += "Number of Players: 0/10\n\n";
+			embedDescription += "Top: 0/2\n";
+			embedDescription += "Jng: 0/2\n";
+			embedDescription += "Mid: 0/2\n";
+			embedDescription += "Bot: 0/2\n";
+			embedDescription += "Sup: 0/2";
+			embedMessage.setDescription(embedDescription);
+			embedMessage.setAuthor("In-House Bot | Match ID: " + (last_match_id + 1))
+			msg.edit(embedMessage);
+		}
+		else {
+			console.log("No entries found, contact administrator")
+		}
+	});
+
+}
+
+async function updateEmbedDescription(msg, embedMessage, matchID) {
+	try {
+		MatchesDatabase.findOne({ match_id: matchID }, async function (err, data) {
+			if (data == null) {
+				console.log("no data found")
+			}
+			else {
+				let topArr = data.top;
+				let jungleArr = data.jungle;
+				let midArr = data.mid;
+				let botArr = data.bot;
+				let supportArr = data.support;
+				let numberOfPlayers = data.number_of_players;
+				let embedDescription = "";
+				embedDescription += "Number of Players: " + numberOfPlayers + "/10\n\n";
+				embedDescription += "Top: " + topArr.length + "/2\n";
+				embedDescription += "Jng: " + jungleArr.length + "/2\n";
+				embedDescription += "Mid: " + midArr.length + "/2\n";
+				embedDescription += "Bot: " + botArr.length + "/2\n";
+				embedDescription += "Sup: " + supportArr.length + "/2\n";
+				embedMessage.setDescription(embedDescription);
+				msg.edit(embedMessage);
+			}
+		});
+	}
+	catch {
+		console.log("Error getting players from match ID");
+	}
+}
+
+function didPlayerSignup(msg, user){
+	try {
+		let didPlayerSignupBoolean = false;
+		MatchesDatabase.findOne({ message_id: msg.id }, async function (err, data) {
+			if (data == null) {
+				console.log("no data found")
+			}
+			else {
+				if (isUserInArray(user, data.top) || isUserInArray(user, data.jungle)
+					|| isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support)){
+						didPlayerSignupBoolean = true;
+				}
+			}
+		});
+		console.log(didPlayerSignupBoolean);
+		return didPlayerSignupBoolean;
+	}
+	catch {
+		console.log("Error checking if player signed up");
+	}
+}
+
+async function addUserToRole(msg, embedMessage, user, role, receivedMessage) {
+	//maybe can use $addToSet
+	console.log("adding user to database")
+
+	try {
+		MatchesDatabase.findOne({ message_id: msg.id }, async function (err, data) {
+			if (data == null) {
+				console.log("no data found")
+			}
+			else {
+				if (!isUserInArray(user, data.top) && !isUserInArray(user, data.jungle) && !isUserInArray(user, data.mid) & !isUserInArray(user, data.bot) && !isUserInArray(user, data.support)){
+						console.log("PLAYER DID NOT SIGN UP");
+						MatchesDatabase.update({ message_id: msg.id }, { $inc: { number_of_players: 1 } }, { multi: false });
+				}
+			}
+		});
+	}
+	catch {
+		console.log("Error checking if player signed up");
+	}
+
+	switch (role) {
+		case "top":
+			try {
+				MatchesDatabase.findOne({ message_id: msg.id }, async function (err, data) {
+					if (data == null) {
+						console.log("no data found")
+					}
+					else if (isUserInArray(user, data.top)) {
+						console.log("user already registered for top")
+					}
+					else {
+						let array = data.top;
+						array.push({ nickname: await getUserNickName(msg, user), discord_id: user.id })
+						MatchesDatabase.update({ message_id: msg.id }, { $set: { top: array } }, { multi: false });
+						updateEmbedDescription(msg, embedMessage, data.match_id);
+					}
+				});
+			}
+			catch {
+				console.log("Error adding user: " + user.id + " to top role");
+			}
+			break;
+		case "jungle":
+			try {
+				MatchesDatabase.findOne({ message_id: msg.id }, async function (err, data) {
+					if (data == null) {
+						console.log("no data found")
+					}
+					else if (isUserInArray(user, data.jungle)) {
+						console.log("user already registered for jungle")
+					}
+					else {
+						let array = data.jungle;
+						array.push({ nickname: await getUserNickName(msg, user), discord_id: user.id })
+						MatchesDatabase.update({ message_id: msg.id }, { $set: { jungle: array } }, { multi: false });
+						updateEmbedDescription(msg, embedMessage, data.match_id);
+					}
+				});
+			}
+			catch {
+				console.log("Error adding user: " + user.id + " to jungle role");
+			}
+			break;
+		case "mid":
+			try {
+				MatchesDatabase.findOne({ message_id: msg.id }, async function (err, data) {
+					if (data == null) {
+						console.log("no data found")
+					}
+					else if (isUserInArray(user, data.mid)) {
+						console.log("user already registered for mid")
+					}
+					else {
+						let array = data.mid;
+						array.push({ nickname: await getUserNickName(msg, user), discord_id: user.id })
+						MatchesDatabase.update({ message_id: msg.id }, { $set: { mid: array } }, { multi: false });
+						updateEmbedDescription(msg, embedMessage, data.match_id);
+					}
+				});
+			}
+			catch {
+				console.log("Error adding user: " + user.id + " to mid role");
+			}
+			break;
+		case "bot":
+			try {
+				MatchesDatabase.findOne({ message_id: msg.id }, async function (err, data) {
+					if (data == null) {
+						console.log("no data found")
+					}
+					else if (isUserInArray(user, data.bot)) {
+						console.log("user already registered for bot")
+					}
+					else {
+						let array = data.bot;
+						array.push({ nickname: await getUserNickName(msg, user), discord_id: user.id })
+						MatchesDatabase.update({ message_id: msg.id }, { $set: { bot: array } }, { multi: false });
+						updateEmbedDescription(msg, embedMessage, data.match_id);
+					}
+				});
+			}
+			catch {
+				console.log("Error adding user: " + user.id + " to bot role");
+			}
+			break;
+		case "support":
+			try {
+				MatchesDatabase.findOne({ message_id: msg.id }, async function (err, data) {
+					if (data == null) {
+						console.log("no data found")
+					}
+					else if (isUserInArray(user, data.support)) {
+						console.log("user already registered for support")
+					}
+					else {
+						let array = data.support;
+						array.push({ nickname: await getUserNickName(msg, user), discord_id: user.id })
+						MatchesDatabase.update({ message_id: msg.id }, { $set: { support: array } }, { multi: false });
+						updateEmbedDescription(msg, embedMessage, data.match_id);
+					}
+				});
+			}
+			catch {
+				console.log("Error adding user: " + user.id + " to support role");
+			}
+			break;
+	}
+
+}
+
+async function removeUserFromAllRoles(msg, embedMessage, user, receivedMessage) {
+	try {
+		MatchesDatabase.findOne({ message_id: msg.id }, async function (err, data) {
+			if (data == null) {
+				console.log("no data found")
+			}
+			else {
+				let updateDatabase = false;
+				let topArr = data.top;
+				if (getIndexOfUserFromArray(user, topArr) > -1) {
+					updateDatabase = true;
+					topArr.splice(getIndexOfUserFromArray(user, topArr), 1)
+				}
+				let jungleArr = data.jungle;
+				if (getIndexOfUserFromArray(user, jungleArr) > -1) {
+					updateDatabase = true;
+					jungleArr.splice(getIndexOfUserFromArray(user, jungleArr), 1)
+				}
+				let midArr = data.mid;
+				if (getIndexOfUserFromArray(user, midArr) > -1) {
+					updateDatabase = true;
+					midArr.splice(getIndexOfUserFromArray(user, midArr), 1)
+				}
+				let botArr = data.bot;
+				if (getIndexOfUserFromArray(user, botArr) > -1) {
+					updateDatabase = true;
+					botArr.splice(getIndexOfUserFromArray(user, botArr), 1)
+				}
+				let supportArr = data.support;
+				if (getIndexOfUserFromArray(user, supportArr) > -1) {
+					updateDatabase = true;
+					supportArr.splice(getIndexOfUserFromArray(user, supportArr), 1)
+				}
+				if (updateDatabase) {
+					let numPlayers = data.number_of_players;
+					MatchesDatabase.update({ message_id: msg.id }, { $set: { top: topArr, jungle: jungleArr, mid: midArr, bot: botArr, support: supportArr, number_of_players: numPlayers - 1} }, { multi: false });
+					updateEmbedDescription(msg, embedMessage, data.match_id);
+				}
+
+			}
+		});
+
+	}
+	catch {
+		console.log("Error removing user: " + user.id + " from all roles");
+	}
+}
+
+function printUserRoles(arguments, receivedMessage) {
+	let matchID = arguments[0];
+	if (!checkIfStringIsValidInt(matchID)) {
+		console.log("Not a valid match ID");
+		return;
+	}
+	matchID = parseInt(arguments[0]);
+	try {
+		MatchesDatabase.findOne({ match_id: matchID }, async function (err, data) {
+			if (data == null) {
+				console.log("no data found")
+			}
+			else {
+				let printMessage = "";
+				let topArr = data.top;
+				let jungleArr = data.jungle;
+				let midArr = data.mid;
+				let botArr = data.bot;
+				let supportArr = data.support;
+				printMessage += "TOP: " + getUserNickNamesFromArray(topArr) + "\n";
+				printMessage += "JNG: " + getUserNickNamesFromArray(jungleArr) + "\n";
+				printMessage += "MID: " + getUserNickNamesFromArray(midArr) + "\n";
+				printMessage += "BOT: " + getUserNickNamesFromArray(botArr) + "\n";
+				printMessage += "SUP: " + getUserNickNamesFromArray(supportArr) + "\n";
+				receivedMessage.channel.send(printMessage);
+			}
+		});
+	}
+	catch {
+		console.log("Error trying to print all players from match ID");
+	}
+
+}
+
+function getUserNickNamesFromArray(array) {
+	let returnMsg = "";
+	for (const elem of array) {
+		returnMsg += elem.nickname;
+		returnMsg += " | "
+	}
+	return returnMsg;
+}
+
+function checkIfStringIsValidInt(input) {
+	if (isNaN(input)) {
+		return false
+	}
+	else {
+		if (Number(input) === parseInt(input, 10)) {
+			return true
+		}
+		else {
+			return false
+		}
+	}
+}
+
+function isUserInArray(user, array) {
+	for (const elem of array) {
+		if (elem.discord_id == user.id) {
+			return true;
+		}
+	}
+	return false;
+}
+
+function getIndexOfUserFromArray(user, array) {
+	let index = 0;
+	for (const elem of array) {
+		if (elem.discord_id == user.id) {
+			return index;
+		}
+		index += 1;
+	}
+	return -1;
+}
+
+async function getUserNickName(msg, user) {
+	let nickname = msg.guild.members.fetch(user.id).then(result => {
+		return result.displayName
+	});
+	return nickname;
+}
+
+async function testCommand(arguments, receivedMessage) {
+
 }
