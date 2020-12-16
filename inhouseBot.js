@@ -77,7 +77,8 @@ async function createMatch(arguments, receivedMessage) {
 	const embedMessage = new Discord.MessageEmbed()
 		.setAuthor("In-House Bot")
 		.setDescription("Processing Match...")
-		.setFooter("React to sign-up for role, click on ❌ to unsign-up")
+		.setFooter("React to sign-up for role(s), click on ❌ to unsign-up")
+		.setThumbnail("https://i.imgur.com/YeRFD2H.png")
 	let embedMessageTitle = "";
 	if (arguments[0] == "fun") {
 		embedMessageTitle += "Fun In-House @ "
@@ -103,8 +104,9 @@ async function createMatch(arguments, receivedMessage) {
 		.then(() => msg.react('🇸'))
 		.then(() => msg.react('❌'))
 		.catch(() => console.error('One of the emojis failed to react.'));
-	await addMatchToDatabase(msg, embedMessage, arguments, receivedMessage)
-	await receivedMessage.delete()
+	
+	addMatchToDatabase(msg, embedMessage, arguments, receivedMessage)
+	receivedMessage.delete()
 
 	const filter = (reaction, user) => { return ['🇹', '🇯', '🇲', '🇧', '🇸', '❌'].includes(reaction.emoji.name) && user.id != client.user.id };
 	const collector = msg.createReactionCollector(filter, {});
