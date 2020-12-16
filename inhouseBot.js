@@ -14,7 +14,7 @@ PlayersDatabase.loadDatabase();
 const dbCompactInterval = 60000
 
 client.on('ready', () => {
-	client.user.setActivity("Test Bot")
+	client.user.setActivity("DM me %help")
 	listAllConnectedServersAndChannels()
 	console.log("DiscordBot Started")
 	MatchesDatabase.persistence.setAutocompactionInterval(dbCompactInterval)
@@ -59,13 +59,27 @@ function processCommand(receivedMessage) {
 				testCommand(arguments, receivedMessage);
 				break;
 			case "create":
-				createMatch(arguments, receivedMessage);
+				if(receivedMessage.channel.type == "text"){
+					createMatch(arguments, receivedMessage);
+					break;
+				}
+				receivedMessage.author.send("Cannot create a match in DMs")
 				break;
 			case "players":
 				printUserRoles(arguments, receivedMessage);
 				break;
+			case "help":
+				helpCommand(arguments, receivedMessage);
+				break;
+			default:
+				receivedMessage.author.send("type %help to get the list of commands");
+				break;
 		}
 	}
+
+}
+
+function helpCommand(arguments, receivedMessage){
 
 }
 
@@ -517,5 +531,5 @@ async function getUserNickName(msg, user) {
 }
 
 async function testCommand(arguments, receivedMessage) {
-
+	console.log(receivedMessage.channel.type)
 }
