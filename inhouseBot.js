@@ -67,6 +67,7 @@ function processCommand(receivedMessage) {
 				break;
 			case "players":
 				printUserRoles(arguments, receivedMessage);
+				receivedMessage.delete();
 				break;
 			case "help":
 				helpCommand(arguments, receivedMessage);
@@ -91,7 +92,7 @@ async function createMatch(arguments, receivedMessage) {
 	const embedMessage = new Discord.MessageEmbed()
 		.setAuthor("In-House Bot")
 		.setDescription("Processing Match...")
-		.setFooter("React to sign-up for role(s), click on ❌ to unsign-up")
+		.setFooter("React to sign-up for role(s), click ❌ to unsign-up, ❓ to get your role(s)")
 		.setThumbnail("https://i.imgur.com/YeRFD2H.png")
 	let embedMessageTitle = "";
 	if (arguments[0] == "fun") {
@@ -117,12 +118,13 @@ async function createMatch(arguments, receivedMessage) {
 		.then(() => msg.react('🇧'))
 		.then(() => msg.react('🇸'))
 		.then(() => msg.react('❌'))
+		.then(() => msg.react('❓'))
 		.catch(() => console.error('One of the emojis failed to react.'));
 	
 	addMatchToDatabase(msg, embedMessage, arguments, receivedMessage)
 	receivedMessage.delete()
 
-	const filter = (reaction, user) => { return ['🇹', '🇯', '🇲', '🇧', '🇸', '❌'].includes(reaction.emoji.name) && user.id != client.user.id };
+	const filter = (reaction, user) => { return ['🇹', '🇯', '🇲', '🇧', '🇸', '❌', '❓'].includes(reaction.emoji.name) && user.id != client.user.id };
 	const collector = msg.createReactionCollector(filter, {});
 	collector.on('collect', (reaction, user) => {
 		console.log("collected reaction: " + reaction.emoji.name)
@@ -152,12 +154,32 @@ async function createMatch(arguments, receivedMessage) {
 				removeUserFromAllRoles(msg, embedMessage, user, receivedMessage);
 				removeReactions(msg, user.id);
 				break;
+			case "❓":
+				console.log("❓ selected from: " + user.id)
+				sendSelectedRoles(msg, user);
+				if(user.id != client.id){
+					removeReaction(msg, user.id, '❓');
+				}
+				break;
 			default:
 				console.log("something went wrong with collecting reactions")
 				break;
 		}
 
 	});
+}
+
+async function removeReaction(msg, user_id, emoji){
+	const userReactions = msg.reactions.cache.filter(reaction => reaction.users.cache.has(user_id));
+	try {
+		for (const reaction of userReactions.values()) {
+			if(reaction.emoji.name == emoji){
+				await reaction.users.remove(user_id);
+			}
+		}
+	} catch (error) {
+		console.error('Failed to remove reaction');
+	}
 }
 
 async function removeReactions(msg, user_id) {
@@ -197,14 +219,7 @@ async function addMatchToDatabase(msg, embedMessage, arguments, receivedMessage)
 				team1: [], team2: []
 			});
 			MatchesDatabase.update({ match_id: 0 }, { $inc: { LAST_MATCH_ID: 1 } }, { multi: false }, function (err, numReplaced) { console.log("Increased LAST_MATCH_ID by 1") });
-			let embedDescription = "";
-			embedDescription += "Number of Players: 0/10\n\n";
-			embedDescription += "Top: 0/2\n";
-			embedDescription += "Jng: 0/2\n";
-			embedDescription += "Mid: 0/2\n";
-			embedDescription += "Bot: 0/2\n";
-			embedDescription += "Sup: 0/2";
-			embedMessage.setDescription(embedDescription);
+			updateEmbedDescription(msg, embedMessage, (last_match_id + 1));
 			embedMessage.setAuthor("In-House Bot | Match ID: " + (last_match_id + 1))
 			msg.edit(embedMessage);
 		}
@@ -229,12 +244,12 @@ async function updateEmbedDescription(msg, embedMessage, matchID) {
 				let supportArr = data.support;
 				let numberOfPlayers = data.number_of_players;
 				let embedDescription = "";
-				embedDescription += "Number of Players: " + numberOfPlayers + "/10\n\n";
+				embedDescription += "```Number of Players: " + numberOfPlayers + "/10\n\n";
 				embedDescription += "Top: " + topArr.length + "/2\n";
 				embedDescription += "Jng: " + jungleArr.length + "/2\n";
 				embedDescription += "Mid: " + midArr.length + "/2\n";
 				embedDescription += "Bot: " + botArr.length + "/2\n";
-				embedDescription += "Sup: " + supportArr.length + "/2\n";
+				embedDescription += "Sup: " + supportArr.length + "/2\n```";
 				embedMessage.setDescription(embedDescription);
 				msg.edit(embedMessage);
 			}
@@ -245,6 +260,8 @@ async function updateEmbedDescription(msg, embedMessage, matchID) {
 	}
 }
 
+
+//function does not work
 function didPlayerSignup(msg, user){
 	try {
 		let didPlayerSignupBoolean = false;
@@ -470,7 +487,7 @@ function printUserRoles(arguments, receivedMessage) {
 				printMessage += "MID: " + getUserNickNamesFromArray(midArr) + "\n";
 				printMessage += "BOT: " + getUserNickNamesFromArray(botArr) + "\n";
 				printMessage += "SUP: " + getUserNickNamesFromArray(supportArr) + "\n";
-				receivedMessage.channel.send(printMessage);
+				receivedMessage.author.send("```Players for Match ID: " + data.match_id + "\n" + printMessage + "```");
 			}
 		});
 	}
@@ -480,11 +497,62 @@ function printUserRoles(arguments, receivedMessage) {
 
 }
 
+function sendSelectedRoles(msg, user){
+	try {
+		MatchesDatabase.findOne({ message_id: msg.id }, async function (err, data) {
+			if (data == null) {
+				console.log("no data found")
+			}
+			else {
+				let printMessage = "Match ID: " + data.match_id + " | You are currently signed up to play ";
+				let isSignedUp = false;
+				let topArr = data.top;
+				let jungleArr = data.jungle;
+				let midArr = data.mid;
+				let botArr = data.bot;
+				let supportArr = data.support;
+				if(isUserInArray(user, topArr)){
+					isSignedUp = true;
+					printMessage += "TOP, "
+				}
+				if(isUserInArray(user, jungleArr)){
+					isSignedUp = true;
+					printMessage += "JUNGLE, "
+				}
+				if(isUserInArray(user, midArr)){
+					isSignedUp = true;
+					printMessage += "MID, "
+				}
+				if(isUserInArray(user, botArr)){
+					isSignedUp = true;
+					printMessage += "BOT, "
+				}
+				if(isUserInArray(user, supportArr)){
+					isSignedUp = true;
+					printMessage += "SUPPORT, "
+				}
+				if(isSignedUp){
+					user.send(printMessage.slice(0, -2));
+				}
+				else{
+					user.send("Match ID: " + data.match_id + " | You are currently NOT signed up for this match")
+				}
+			}
+		});
+	}
+	catch {
+		console.log("Error trying to print all players from match ID");
+	}
+}
+
 function getUserNickNamesFromArray(array) {
 	let returnMsg = "";
 	for (const elem of array) {
 		returnMsg += elem.nickname;
 		returnMsg += " | "
+	}
+	if(array.length > 0){
+		return returnMsg.slice(0, -3)
 	}
 	return returnMsg;
 }
