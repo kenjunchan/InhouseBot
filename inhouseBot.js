@@ -123,7 +123,7 @@ async function createMatch(arguments, receivedMessage) {
 	
 	addMatchToDatabase(msg, embedMessage, arguments, receivedMessage)
 	receivedMessage.delete()
-
+	//getDatefromHHMM()
 	const filter = (reaction, user) => { return ['🇹', '🇯', '🇲', '🇧', '🇸', '❌', '❓'].includes(reaction.emoji.name) && user.id != client.user.id };
 	const collector = msg.createReactionCollector(filter, {});
 	collector.on('collect', (reaction, user) => {
@@ -196,12 +196,15 @@ async function removeReactions(msg, user_id) {
 function checkCreateMatchArguments(arguments, receivedMessage) {
 	let timeRe = new RegExp('^(([0]?[1-9]|1[0-2])(:)([0-5][0-9]))$');
 	if (arguments[0].toLowerCase() != "fun" && arguments[0].toLowerCase() != "serious") {
+		receivedMessage.author.send("Invalid game-type | try \"serious\" or \"fun\"");
 		return false;
 	}
 	else if (!timeRe.test(arguments[1])){
+		receivedMessage.author.send("Invalid time, valid input HH:MM | example: 08:15");
 		return false;
 	}
 	else if (arguments[2].toLowerCase() != "am" && arguments[2].toLowerCase() != "pm") {
+		receivedMessage.author.send("Invalid time argument | try \"am\" or \"pm\"");
 		return false;
 	}
 	return true;
@@ -224,16 +227,14 @@ async function addMatchToDatabase(msg, embedMessage, arguments, receivedMessage)
 				team1: [], team2: []
 			});
 			MatchesDatabase.update({ match_id: 0 }, { $inc: { LAST_MATCH_ID: 1 } }, { multi: false }, function (err, numReplaced) { console.log("Increased LAST_MATCH_ID by 1") });
-			
 			let embedDescription = "";
 			embedDescription += "```Number of Players: 0/10\n\n";
 			embedDescription += "Top: 0/2\n";
 			embedDescription += "Jng: 0/2\n";
 			embedDescription += "Mid: 0/2\n";
 			embedDescription += "Bot: 0/2\n";
-			embedDescription += "Sup: 0/2\n```";
+			embedDescription += "Sup: 0/2\n\n```";
 			embedMessage.setDescription(embedDescription);
-			//updateEmbedDescription(msg, embedMessage, (last_match_id + 1)); this does not work
 			embedMessage.setAuthor("In-House Bot | Match ID: " + (last_match_id + 1))
 			msg.edit(embedMessage);
 		}
@@ -263,7 +264,7 @@ async function updateEmbedDescription(msg, embedMessage, matchID) {
 				embedDescription += "Jng: " + jungleArr.length + "/2\n";
 				embedDescription += "Mid: " + midArr.length + "/2\n";
 				embedDescription += "Bot: " + botArr.length + "/2\n";
-				embedDescription += "Sup: " + supportArr.length + "/2\n```";
+				embedDescription += "Sup: " + supportArr.length + "/2\n\n```";
 				embedMessage.setDescription(embedDescription);
 				msg.edit(embedMessage);
 			}
@@ -275,17 +276,31 @@ async function updateEmbedDescription(msg, embedMessage, matchID) {
 }
 
 function getDateFromHHMM(HHMMInput, ampm){
+	let currentDate = new Date();
 	let date = new Date();
 	let splitHHMM = HHMMInput.split(":");
 	if(checkIfStringIsValidInt(splitHHMM[0]) && checkIfStringIsValidInt(splitHHMM[1])){
 		if(ampm == "pm"){
-			date.setHours((parseInt(splitHHMM[0]) + 12));
+			if(splitHHMM[0] == "12"){
+				date.setHours((parseInt(splitHHMM[0])));
+			}
+			else{
+				date.setHours((parseInt(splitHHMM[0]) + 12));
+			}
 		}
 		else{
-			date.setHours(parseInt(splitHHMM[0]));
+			if(splitHHMM[0] == "12"){
+				date.setHours((parseInt(0)));
+			}
+			else{
+				date.setHours(parseInt(splitHHMM[0]));
+			}
 		}
 		date.setMinutes(parseInt(splitHHMM[1]));
 		date.setSeconds(0);
+		if((currentDate.getTime() - date.getTime()) > 0){
+			date.setDate(date.getDate() + 1);
+		}
 	}
 	return date;
 }
@@ -316,7 +331,6 @@ function didPlayerSignup(msg, user){
 async function addUserToRole(msg, embedMessage, user, role, receivedMessage) {
 	//maybe can use $addToSet
 	console.log("adding user to database")
-
 	try {
 		MatchesDatabase.findOne({ message_id: msg.id }, async function (err, data) {
 			if (data == null) {
@@ -628,21 +642,6 @@ async function getUserNickName(msg, user) {
 }
 
 async function testCommand(arguments, receivedMessage) {
-	/*
-	//console.log(receivedMessage.channel.type)
-	let currentDate = new Date();
-	let newDate = new Date();
-	newDate.setHours((08+12));
-	//receivedMessage.channel.send(currentDate.getTime());
-	receivedMessage.channel.send(currentDate.toLocaleTimeString('en-US'));
-	receivedMessage.channel.send(newDate.toLocaleTimeString('en-US'));
-	console.log(checkIfStringIsValidInt("08"));
-	console.log(parseInt("08"));
-	console.log("08:30".split(":"));
-	*/
-	//let currentDate = getDateFromHHMM("08:30");
-	//receivedMessage.channel.send(currentDate.toLocaleTimeString());
-	//let newDate = new Date(1608167700265);
-	//let newDate = getDateFromHHMM("08:15", "pm");
-	receivedMessage.channel.send(newDate.toLocaleTimeString('en-US'));
+	console.log(getDateFromHHMM(arguments[0],arguments[1]).toLocaleDateString());
+	console.log(getDateFromHHMM(arguments[0],arguments[1]).toLocaleTimeString());
 }
