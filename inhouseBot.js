@@ -181,7 +181,7 @@ async function createMatch(arguments, receivedMessage) {
 					console.log("no data found")
 				}
 				else {
-					embedMessage.setFooter("Sign-ups have closed, please wait for match creator to create teams");
+					embedMessage.setFooter("Sign-ups have closed, please wait for match creator to create teams, type \"%roles " + data.match_id + "\" to get your roles");
 					msg.edit(embedMessage);
 					receivedMessage.author.send("Match sign-ups for Match ID: " + data.match_id + " ended, please type \"%players " + data.match_id + "\" to get players and assign them to teams, type %help for commands")
 				}
