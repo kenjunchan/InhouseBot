@@ -11,7 +11,9 @@ MatchesDatabase.loadDatabase();
 const PlayersDatabase = new Datastore('PlayersDatastore.db');
 PlayersDatabase.loadDatabase();
 
-const dbCompactInterval = 60000
+const dbCompactInterval = 300000
+const matchCloseSignupDelay = 0; //amount of time after match time to close sign-ups in milliseconds (300000 = 5 minutes)
+
 
 client.on('ready', () => {
 	client.user.setActivity("DM me %help")
@@ -69,6 +71,9 @@ function processCommand(receivedMessage) {
 				printUserRoles(arguments, receivedMessage);
 				receivedMessage.delete()
 				break;
+			case "roles":
+				rolesCommand(arguments, receivedMessage);
+				break;
 			case "help":
 				helpCommand(arguments, receivedMessage);
 				break;
@@ -123,9 +128,11 @@ async function createMatch(arguments, receivedMessage) {
 	
 	addMatchToDatabase(msg, embedMessage, arguments, receivedMessage)
 	receivedMessage.delete()
-	//getDatefromHHMM()
+	let currentDate = new Date();
+	let matchTime = getDateFromHHMM(arguments[1], arguments[2]);
+	let timeOutTime = Math.abs(currentDate.getTime() - matchTime.getTime()) + matchCloseSignupDelay;
 	const filter = (reaction, user) => { return ['🇹', '🇯', '🇲', '🇧', '🇸', '❌', '❓'].includes(reaction.emoji.name) && user.id != client.user.id };
-	const collector = msg.createReactionCollector(filter, {});
+	const collector = msg.createReactionCollector(filter, { time: timeOutTime });
 	collector.on('collect', (reaction, user) => {
 		console.log("collected reaction: " + reaction.emoji.name)
 		switch (reaction.emoji.name) {
@@ -165,7 +172,25 @@ async function createMatch(arguments, receivedMessage) {
 				console.log("something went wrong with collecting reactions")
 				break;
 		}
+	});
 
+	collector.on('end', collected => {
+		try {
+			MatchesDatabase.findOne({ message_id: msg.id }, async function (err, data) {
+				if (data == null) {
+					console.log("no data found")
+				}
+				else {
+					embedMessage.setFooter("Sign-ups have closed, please wait for match creator to create teams");
+					msg.edit(embedMessage);
+					receivedMessage.author.send("Match sign-ups for Match ID: " + data.match_id + " ended, please type \"%players " + data.match_id + "\" to get players and assign them to teams, type %help for commands")
+				}
+			});
+		}
+		catch {
+			console.log("Error getting match after collection end");
+		}
+		console.log("collection ended");
 	});
 }
 
@@ -585,6 +610,60 @@ function sendSelectedRoles(msg, user){
 	}
 	catch {
 		console.log("Error trying to print all players from match ID");
+	}
+}
+
+function rolesCommand(arguments, receivedMessage){
+	try {
+		if(!checkIfStringIsValidInt(arguments[0])){
+			receivedMessage.author.send("Invalid Match ID, must be a number");
+			return;
+		}
+		MatchesDatabase.findOne({ match_id: parseInt(arguments[0]) }, async function (err, data) {
+			if (data == null) {
+				receivedMessage.author.send("Error in finding the match, perhaps the match does not exist?")
+				console.log("no data found")
+			}
+			else {
+				let printMessage = "Match ID: " + data.match_id + " | You are currently signed up to play ";
+				let isSignedUp = false;
+				let topArr = data.top;
+				let jungleArr = data.jungle;
+				let midArr = data.mid;
+				let botArr = data.bot;
+				let supportArr = data.support;
+				let user = receivedMessage.author;
+				if(isUserInArray(user, topArr)){
+					isSignedUp = true;
+					printMessage += "TOP, "
+				}
+				if(isUserInArray(user, jungleArr)){
+					isSignedUp = true;
+					printMessage += "JUNGLE, "
+				}
+				if(isUserInArray(user, midArr)){
+					isSignedUp = true;
+					printMessage += "MID, "
+				}
+				if(isUserInArray(user, botArr)){
+					isSignedUp = true;
+					printMessage += "BOT, "
+				}
+				if(isUserInArray(user, supportArr)){
+					isSignedUp = true;
+					printMessage += "SUPPORT, "
+				}
+				if(isSignedUp){
+					user.send(printMessage.slice(0, -2));
+				}
+				else{
+					user.send("Match ID: " + data.match_id + " | You are currently NOT signed up for this match")
+				}
+			}
+		});
+	}
+	catch {
+		console.log("Error with roles command");
 	}
 }
 
