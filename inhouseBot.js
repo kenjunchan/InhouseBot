@@ -74,6 +74,9 @@ function processCommand(receivedMessage) {
 			case "team":
 				teamCommand(arguments, receivedMessage);
 				break;
+			case "start":
+				startMatchCommand(arguments, receivedMessage);
+				break;
 			case "roles":
 				rolesCommand(arguments, receivedMessage);
 				break;
@@ -231,6 +234,63 @@ function teamCommand(arguments, receivedMessage) {
 	else if (teamNumber == 2) {
 		MatchesDatabase.update({ match_id: matchID }, { $set: { team2: usersIdArray } }, { multi: false });
 	}
+
+}
+
+async function startMatchCommand(arguments, receivedMessage) {
+	//%start 5
+	let matchID;
+	if (checkIfStringIsValidInt(arguments[0])) {
+		matchID = parseInt(arguments[0]);
+	}
+	else {
+		console.log("invalid match id");
+		//output user error message here
+		return;
+	}
+	const embedMessage = new Discord.MessageEmbed()
+		.setAuthor("In-House Bot | Match ID: " + arguments[0])
+		.setDescription("Processing Teams...")
+		//.setFooter("React to sign-up for role(s), click ❌ to unsign-up, ❓ to get your role(s)")
+		.setThumbnail("https://i.imgur.com/YeRFD2H.png")
+	//.setTitle("")
+
+	const msg = await receivedMessage.channel.send(embedMessage);
+	//client.users.cache.get('<id>').send('<message>');
+	try {
+		MatchesDatabase.findOne({ match_id: matchID }, async function (err, data) {
+			if (data == null) {
+				console.log("no data found")
+			}
+			else {
+				let team1Arr = data.team1;
+				let team2Arr = data.team2;
+
+				if (team1Arr.length != 5) {
+					console.log("team 1 invalid");
+					return;
+				}
+				else if (team2Arr.length != 5) {
+					console.log("team 2 invalid");
+					return;
+				}
+
+				let embedDescription = "\n";
+				embedDescription += "Top: <@" + team1Arr[0] + "> vs <@" + team2Arr[0] + ">\n";
+				embedDescription += "Jng: <@" + team1Arr[1] + "> vs <@" + team2Arr[1] + ">\n";
+				embedDescription += "Mid: <@" + team1Arr[2] + "> vs <@" + team2Arr[2] + ">\n";
+				embedDescription += "Bot: <@" + team1Arr[3] + "> vs <@" + team2Arr[3] + ">\n";
+				embedDescription += "Sup: <@" + team1Arr[4] + "> vs <@" + team2Arr[4] + ">\n";
+				embedMessage.setDescription(embedDescription);
+				msg.edit(embedMessage)
+			}
+		});
+	}
+	catch {
+		console.log("Error starting match database");
+		return;
+	}
+
 
 }
 
