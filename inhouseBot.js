@@ -283,6 +283,13 @@ async function startMatchCommand(arguments, receivedMessage) {
 				embedDescription += "Sup: <@" + team1Arr[4] + "> vs <@" + team2Arr[4] + ">\n";
 				embedMessage.setDescription(embedDescription);
 				msg.edit(embedMessage)
+				try {
+					sendDMToPlayers(data.team1, data.match_id);
+					sendDMToPlayers(data.team2, data.match_id);
+				}
+				catch {
+					console.log("error sending DM to players, perhaps player(s) is/are invalid?")
+				}
 			}
 		});
 	}
@@ -291,6 +298,16 @@ async function startMatchCommand(arguments, receivedMessage) {
 		return;
 	}
 
+
+
+}
+
+function sendDMToPlayers(usersIdArray, matchID){
+	const rolesArray = ["Top", "Jungle", "Mid", "Bot", "Support"];
+	var i;
+	for(i = 0; i < usersIdArray.length; i++){
+		client.users.cache.get(usersIdArray[i]).send("**Match ID: " + matchID + "** starting soon! You are assigned to play: **" + rolesArray[i] + "**");
+	}
 
 }
 
