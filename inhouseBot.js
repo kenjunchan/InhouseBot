@@ -61,7 +61,7 @@ function processCommand(receivedMessage) {
 				testCommand(arguments, receivedMessage);
 				break;
 			case "create":
-				if(receivedMessage.channel.type == "text"){
+				if (receivedMessage.channel.type == "text") {
 					createMatch(arguments, receivedMessage);
 					break;
 				}
@@ -70,6 +70,9 @@ function processCommand(receivedMessage) {
 			case "players":
 				printUserRoles(arguments, receivedMessage);
 				receivedMessage.delete()
+				break;
+			case "team":
+				teamCommand(arguments, receivedMessage);
 				break;
 			case "roles":
 				rolesCommand(arguments, receivedMessage);
@@ -85,7 +88,7 @@ function processCommand(receivedMessage) {
 
 }
 
-function helpCommand(arguments, receivedMessage){
+function helpCommand(arguments, receivedMessage) {
 
 }
 
@@ -125,7 +128,7 @@ async function createMatch(arguments, receivedMessage) {
 		.then(() => msg.react('❌'))
 		.then(() => msg.react('❓'))
 		.catch(() => console.error('One of the emojis failed to react.'));
-	
+
 	addMatchToDatabase(msg, embedMessage, arguments, receivedMessage)
 	receivedMessage.delete()
 	let currentDate = new Date();
@@ -164,7 +167,7 @@ async function createMatch(arguments, receivedMessage) {
 			case "❓":
 				console.log("❓ selected from: " + user.id)
 				sendSelectedRoles(msg, user);
-				if(user.id != client.id){
+				if (user.id != client.id) {
 					removeReaction(msg, user.id, '❓');
 				}
 				break;
@@ -194,11 +197,48 @@ async function createMatch(arguments, receivedMessage) {
 	});
 }
 
-async function removeReaction(msg, user_id, emoji){
+function teamCommand(arguments, receivedMessage) {
+	let matchID;
+	if (checkIfStringIsValidInt(arguments[0])) {
+		matchID = parseInt(arguments[0]);
+	}
+	else {
+		console.log("invalid match id");
+		//output user error message here
+		return;
+	}
+	let teamNumber;
+	if (checkIfStringIsValidInt(arguments[1])) {
+		teamNumber = parseInt(arguments[1]);
+	}
+	else {
+		console.log("invalid team #");
+		//output user error message here
+		return;
+	}
+	let usersArray = getArrayOfUsersFromMentions(arguments.slice(2));
+	if (usersArray.length != 5) {
+		console.log("invalid users array")
+		//output user error message here
+		return;
+	}
+	let usersIdArray = [];
+	usersArray.forEach(user => usersIdArray.push(user.id));
+
+	if (teamNumber == 1) {
+		MatchesDatabase.update({ match_id: matchID }, { $set: { team1: usersIdArray } }, { multi: false });
+	}
+	else if (teamNumber == 2) {
+		MatchesDatabase.update({ match_id: matchID }, { $set: { team2: usersIdArray } }, { multi: false });
+	}
+
+}
+
+async function removeReaction(msg, user_id, emoji) {
 	const userReactions = msg.reactions.cache.filter(reaction => reaction.users.cache.has(user_id));
 	try {
 		for (const reaction of userReactions.values()) {
-			if(reaction.emoji.name == emoji){
+			if (reaction.emoji.name == emoji) {
 				await reaction.users.remove(user_id);
 			}
 		}
@@ -224,7 +264,7 @@ function checkCreateMatchArguments(arguments, receivedMessage) {
 		receivedMessage.author.send("Invalid game-type | try \"serious\" or \"fun\"");
 		return false;
 	}
-	else if (!timeRe.test(arguments[1])){
+	else if (!timeRe.test(arguments[1])) {
 		receivedMessage.author.send("Invalid time, valid input HH:MM | example: 08:15");
 		return false;
 	}
@@ -240,7 +280,7 @@ async function addMatchToDatabase(msg, embedMessage, arguments, receivedMessage)
 	let HHMM = arguments[1];
 	let matchTime = getDateFromHHMM(HHMM, arguments[2]);
 	let isSerious = true;
-	if (arguments[0].toLowerCase() == "fun"){
+	if (arguments[0].toLowerCase() == "fun") {
 		isSerious = false;
 	}
 	MatchesDatabase.findOne({ match_id: 0 }, function (err, data) {
@@ -300,30 +340,30 @@ async function updateEmbedDescription(msg, embedMessage, matchID) {
 	}
 }
 
-function getDateFromHHMM(HHMMInput, ampm){
+function getDateFromHHMM(HHMMInput, ampm) {
 	let currentDate = new Date();
 	let date = new Date();
 	let splitHHMM = HHMMInput.split(":");
-	if(checkIfStringIsValidInt(splitHHMM[0]) && checkIfStringIsValidInt(splitHHMM[1])){
-		if(ampm == "pm"){
-			if(splitHHMM[0] == "12"){
+	if (checkIfStringIsValidInt(splitHHMM[0]) && checkIfStringIsValidInt(splitHHMM[1])) {
+		if (ampm == "pm") {
+			if (splitHHMM[0] == "12") {
 				date.setHours((parseInt(splitHHMM[0])));
 			}
-			else{
+			else {
 				date.setHours((parseInt(splitHHMM[0]) + 12));
 			}
 		}
-		else{
-			if(splitHHMM[0] == "12"){
+		else {
+			if (splitHHMM[0] == "12") {
 				date.setHours((parseInt(0)));
 			}
-			else{
+			else {
 				date.setHours(parseInt(splitHHMM[0]));
 			}
 		}
 		date.setMinutes(parseInt(splitHHMM[1]));
 		date.setSeconds(0);
-		if((currentDate.getTime() - date.getTime()) > 0){
+		if ((currentDate.getTime() - date.getTime()) > 0) {
 			date.setDate(date.getDate() + 1);
 		}
 	}
@@ -331,7 +371,7 @@ function getDateFromHHMM(HHMMInput, ampm){
 }
 
 //function does not work
-function didPlayerSignup(msg, user){
+function didPlayerSignup(msg, user) {
 	try {
 		let didPlayerSignupBoolean = false;
 		MatchesDatabase.findOne({ message_id: msg.id }, async function (err, data) {
@@ -340,8 +380,8 @@ function didPlayerSignup(msg, user){
 			}
 			else {
 				if (isUserInArray(user, data.top) || isUserInArray(user, data.jungle)
-					|| isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support)){
-						didPlayerSignupBoolean = true;
+					|| isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support)) {
+					didPlayerSignupBoolean = true;
 				}
 			}
 		});
@@ -362,9 +402,9 @@ async function addUserToRole(msg, embedMessage, user, role, receivedMessage) {
 				console.log("no data found")
 			}
 			else {
-				if (!isUserInArray(user, data.top) && !isUserInArray(user, data.jungle) && !isUserInArray(user, data.mid) & !isUserInArray(user, data.bot) && !isUserInArray(user, data.support)){
-						console.log("PLAYER DID NOT SIGN UP");
-						MatchesDatabase.update({ message_id: msg.id }, { $inc: { number_of_players: 1 } }, { multi: false });
+				if (!isUserInArray(user, data.top) && !isUserInArray(user, data.jungle) && !isUserInArray(user, data.mid) & !isUserInArray(user, data.bot) && !isUserInArray(user, data.support)) {
+					console.log("PLAYER DID NOT SIGN UP");
+					MatchesDatabase.update({ message_id: msg.id }, { $inc: { number_of_players: 1 } }, { multi: false });
 				}
 			}
 		});
@@ -518,7 +558,7 @@ async function removeUserFromAllRoles(msg, embedMessage, user, receivedMessage) 
 				}
 				if (updateDatabase) {
 					let numPlayers = data.number_of_players;
-					MatchesDatabase.update({ message_id: msg.id }, { $set: { top: topArr, jungle: jungleArr, mid: midArr, bot: botArr, support: supportArr, number_of_players: numPlayers - 1} }, { multi: false });
+					MatchesDatabase.update({ message_id: msg.id }, { $set: { top: topArr, jungle: jungleArr, mid: midArr, bot: botArr, support: supportArr, number_of_players: numPlayers - 1 } }, { multi: false });
 					updateEmbedDescription(msg, embedMessage, data.match_id);
 				}
 
@@ -565,7 +605,7 @@ function printUserRoles(arguments, receivedMessage) {
 
 }
 
-function sendSelectedRoles(msg, user){
+function sendSelectedRoles(msg, user) {
 	try {
 		MatchesDatabase.findOne({ message_id: msg.id }, async function (err, data) {
 			if (data == null) {
@@ -579,30 +619,30 @@ function sendSelectedRoles(msg, user){
 				let midArr = data.mid;
 				let botArr = data.bot;
 				let supportArr = data.support;
-				if(isUserInArray(user, topArr)){
+				if (isUserInArray(user, topArr)) {
 					isSignedUp = true;
 					printMessage += "TOP, "
 				}
-				if(isUserInArray(user, jungleArr)){
+				if (isUserInArray(user, jungleArr)) {
 					isSignedUp = true;
 					printMessage += "JUNGLE, "
 				}
-				if(isUserInArray(user, midArr)){
+				if (isUserInArray(user, midArr)) {
 					isSignedUp = true;
 					printMessage += "MID, "
 				}
-				if(isUserInArray(user, botArr)){
+				if (isUserInArray(user, botArr)) {
 					isSignedUp = true;
 					printMessage += "BOT, "
 				}
-				if(isUserInArray(user, supportArr)){
+				if (isUserInArray(user, supportArr)) {
 					isSignedUp = true;
 					printMessage += "SUPPORT, "
 				}
-				if(isSignedUp){
+				if (isSignedUp) {
 					user.send(printMessage.slice(0, -2));
 				}
-				else{
+				else {
 					user.send("Match ID: " + data.match_id + " | You are currently NOT signed up for this match")
 				}
 			}
@@ -613,9 +653,9 @@ function sendSelectedRoles(msg, user){
 	}
 }
 
-function rolesCommand(arguments, receivedMessage){
+function rolesCommand(arguments, receivedMessage) {
 	try {
-		if(!checkIfStringIsValidInt(arguments[0])){
+		if (!checkIfStringIsValidInt(arguments[0])) {
 			receivedMessage.author.send("Invalid Match ID, must be a number");
 			return;
 		}
@@ -633,30 +673,30 @@ function rolesCommand(arguments, receivedMessage){
 				let botArr = data.bot;
 				let supportArr = data.support;
 				let user = receivedMessage.author;
-				if(isUserInArray(user, topArr)){
+				if (isUserInArray(user, topArr)) {
 					isSignedUp = true;
 					printMessage += "TOP, "
 				}
-				if(isUserInArray(user, jungleArr)){
+				if (isUserInArray(user, jungleArr)) {
 					isSignedUp = true;
 					printMessage += "JUNGLE, "
 				}
-				if(isUserInArray(user, midArr)){
+				if (isUserInArray(user, midArr)) {
 					isSignedUp = true;
 					printMessage += "MID, "
 				}
-				if(isUserInArray(user, botArr)){
+				if (isUserInArray(user, botArr)) {
 					isSignedUp = true;
 					printMessage += "BOT, "
 				}
-				if(isUserInArray(user, supportArr)){
+				if (isUserInArray(user, supportArr)) {
 					isSignedUp = true;
 					printMessage += "SUPPORT, "
 				}
-				if(isSignedUp){
+				if (isSignedUp) {
 					user.send(printMessage.slice(0, -2));
 				}
-				else{
+				else {
 					user.send("Match ID: " + data.match_id + " | You are currently NOT signed up for this match")
 				}
 			}
@@ -673,7 +713,7 @@ function getUserNickNamesFromArray(array) {
 		returnMsg += elem.nickname;
 		returnMsg += " | "
 	}
-	if(array.length > 0){
+	if (array.length > 0) {
 		return returnMsg.slice(0, -3)
 	}
 	return returnMsg;
@@ -720,7 +760,37 @@ async function getUserNickName(msg, user) {
 	return nickname;
 }
 
+function getUserFromMention(mention) {
+	if (!mention) return;
+
+	if (mention.startsWith('<@') && mention.endsWith('>')) {
+		mention = mention.slice(2, -1);
+
+		if (mention.startsWith('!')) {
+			mention = mention.slice(1);
+		}
+
+		return client.users.cache.get(mention);
+	}
+}
+
+function getArrayOfUsersFromMentions(mentions, receivedMessage) {
+	//mentions is list of arguments past 1
+	let users = []
+	var i;
+	for (i = 0; i < mentions.length; i++) {
+		let user = getUserFromMention(mentions[i]);
+		if (user !== undefined) {
+			users.push(user);
+		}
+	}
+	return users;
+}
+
 async function testCommand(arguments, receivedMessage) {
+	/*
 	console.log(getDateFromHHMM(arguments[0],arguments[1]).toLocaleDateString());
 	console.log(getDateFromHHMM(arguments[0],arguments[1]).toLocaleTimeString());
+	*/
+	console.log(getArrayOfUsersFromMentions(arguments.slice(1)));
 }
