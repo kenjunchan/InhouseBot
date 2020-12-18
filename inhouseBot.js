@@ -81,6 +81,12 @@ function processCommand(receivedMessage) {
 			case "roles":
 				rolesCommand(arguments, receivedMessage);
 				break;
+			case "stats":
+				statsCommand(arguments, receivedMessage);
+				break;
+			case "leaderboard":
+				leaderboardCommand(arguments, receivedMessage);
+				break;
 			case "help":
 				helpCommand(arguments, receivedMessage);
 				break;
@@ -384,15 +390,17 @@ async function teamWon(msg, matchID, playersIdArray) {
 		PlayersDatabase.findOne({player_id: playerID}, async function (err,data) {
 			if(data == null){
 				console.log("Player not found, adding to DB")
-				let user = client.users.cache.get(playerID);
+				//let user = client.users.cache.get(playerID);
 				let userNickname = await getUserNickName(msg, playerID);
-				//console.log(playerID);
-				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 1, loss: 0, winteam: [playersIdArray], loseteam: [], number_of_mvp: 0, number_of_ace: 0 });
+				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 1, loss: 0, win_rate: 1.0, winteam: [playersIdArray], loseteam: [], number_of_mvp: 0, number_of_ace: 0 });
 			}
 			else{
 				let userNickname = await getUserNickName(msg, playerID);
 				let playersArray = playersIdArray.concat(data.winteam);
-				PlayersDatabase.update({ player_id: playerID }, { $set: { win: (data.win + 1), winteam: playersArray, nickname: userNickname } }, { multi: false }, function (err, numReplaced) { });
+				let numberOfWins = (data.win + 1)
+				let numberOfLoss = data.loss;
+				let winrate = numberOfWins/(numberOfWins+numberOfLoss);
+				PlayersDatabase.update({ player_id: playerID }, { $set: { win: numberOfWins, win_rate: winrate, winteam: playersArray, nickname: userNickname } }, { multi: false }, function (err, numReplaced) { });
 			}
 		});
 	}
@@ -403,15 +411,16 @@ async function teamLose(msg, matchID, playersIdArray) {
 		PlayersDatabase.findOne({player_id: playerID}, async function (err,data) {
 			if(data == null){
 				console.log("Player not found, adding to DB")
-				let user = client.users.cache.get(playerID);
 				let userNickname = await getUserNickName(msg, playerID);
-				//console.log(playerID);
-				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 0, loss: 1, winteam: [], loseteam: [playersIdArray], number_of_mvp: 0, number_of_ace: 0 });
+				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 0, loss: 1, win_rate: 0.0, winteam: [], loseteam: [playersIdArray], number_of_mvp: 0, number_of_ace: 0 });
 			}
 			else{
 				let userNickname = await getUserNickName(msg, playerID);
 				let playersArray = playersIdArray.concat(data.winteam);
-				PlayersDatabase.update({ player_id: playerID }, { $set: { loss: (data.loss + 1), loseteam: playersArray, nickname: userNickname } }, { multi: false }, function (err, numReplaced) { });
+				let numberOfWins = data.win;
+				let numberOfLoss = (data.loss + 1);
+				let winrate = numberOfWins/(numberOfWins+numberOfLoss);
+				PlayersDatabase.update({ player_id: playerID }, { $set: { loss: numberOfLoss, win_rate: winrate, loseteam: playersArray, nickname: userNickname } }, { multi: false }, function (err, numReplaced) { });
 			}
 		});
 	}
@@ -968,15 +977,6 @@ function getIndexOfUserFromArray(user, array) {
 	return -1;
 }
 
-/*
-async function getUserNickName(msg, user) {
-	let nickname = msg.guild.members.fetch(user.id).then(result => {
-		return result.displayName
-	});
-	return nickname;
-}
-*/
-
 async function getUserNickName(msg, userId) {
 	let nickname = msg.guild.members.fetch(userId).then(result => {
 		return result.displayName
@@ -1011,11 +1011,22 @@ function getArrayOfUsersFromMentions(mentions, receivedMessage) {
 	return users;
 }
 
+function leaderboardCommand(arguments, receivedMessage) {
+
+}
+
+function statsCommand(arguments, receivedMessage){
+	if (arguments.length == 1){
+
+	}
+}
+
+async function compactDatabases(){
+	MatchesDatabase.persistence.compactDatafile();
+	PlayersDatabase.persistence.compactDatafile();
+}
+
 async function testCommand(arguments, receivedMessage) {
-	/*
-	console.log(getDateFromHHMM(arguments[0],arguments[1]).toLocaleDateString());
-	console.log(getDateFromHHMM(arguments[0],arguments[1]).toLocaleTimeString());
-	*/
-	//console.log(getArrayOfUsersFromMentions(arguments.slice(1)));
-	console.log(arguments.length)
+	MatchesDatabase.persistence.compactDatafile();
+	PlayersDatabase.persistence.compactDatafile();
 }
