@@ -87,9 +87,11 @@ function processCommand(receivedMessage) {
 				break;
 			case "leaderboard":
 				leaderboardCommand(arguments, receivedMessage);
+				receivedMessage.delete();
 				break;
 			case "help":
 				helpCommand(arguments, receivedMessage);
+				receivedMessage.delete();
 				break;
 			default:
 				receivedMessage.author.send("type %help to get the list of commands");
@@ -350,7 +352,7 @@ async function startMatchCommand(arguments, receivedMessage) {
 			switch (reaction.emoji.name) {
 				case "1️⃣":
 					console.log("team 1 won selected from: " + user.id)
-					if(user.id == data.creator_id){
+					if(user.id == data.creator_id && data.serious){
 						teamWon(msg, matchID, data.team1);
 						teamLose(msg, matchID, data.team2);
 					}
@@ -360,7 +362,7 @@ async function startMatchCommand(arguments, receivedMessage) {
 					break;
 				case "2️⃣":
 					console.log("team 2 won selected from: " + user.id)
-					if(user.id == data.creator_id){
+					if(user.id == data.creator_id && data.serious){
 						teamWon(msg, matchID, data.team2);
 						teamLose(msg, matchID, data.team1);
 					}
@@ -405,6 +407,7 @@ async function teamWon(msg, matchID, playersIdArray) {
 			}
 		});
 	}
+	compactDatabases();
 }
 
 async function teamLose(msg, matchID, playersIdArray) {
@@ -425,6 +428,7 @@ async function teamLose(msg, matchID, playersIdArray) {
 			}
 		});
 	}
+	compactDatabases();
 }
 
 function sendDMToPlayers(usersIdArray, matchID, matchDate) {
@@ -1031,10 +1035,11 @@ function leaderboardCommand(arguments, receivedMessage) {
 		PlayersDatabase.find({}).sort({ win_rate: -1, number_of_mvp: -1, number_of_ace: -1 }).exec(function (err, data) {
 			if (data != null) {
 				let amt = 0;
-				fields = [["Name", "Winrate %", "Wins", "Losses", "# of MVPs", "# of ACEs"]];
+				fields = [["Name", "W/L | %", "MVPs", "ACEs"]];
 				data.forEach(function (item) {
 					if (amt < limit) {
-						fields.push([item.nickname, (Math.floor(item.win_rate * 100) + "%"), item.win, item.loss, item.number_of_mvp, item.number_of_ace]);
+						let winrateString = (Math.floor(item.win_rate * 100) + "%");
+						fields.push([item.nickname, (item.win + "W/" + item.loss + "L | " + winrateString), item.number_of_mvp, item.number_of_ace]);
 						amt++;
 					}
 				});
@@ -1051,10 +1056,12 @@ function leaderboardCommand(arguments, receivedMessage) {
 }
 
 function statsCommand(arguments, receivedMessage){
+
 	if (arguments.length == 1){
 
 	}
-}
+
+} 
 
 async function compactDatabases(){
 	MatchesDatabase.persistence.compactDatafile();
@@ -1062,6 +1069,6 @@ async function compactDatabases(){
 }
 
 async function testCommand(arguments, receivedMessage) {
-	MatchesDatabase.persistence.compactDatafile();
-	PlayersDatabase.persistence.compactDatafile();
+	//MatchesDatabase.persistence.compactDatafile();
+	//PlayersDatabase.persistence.compactDatafile();
 }
