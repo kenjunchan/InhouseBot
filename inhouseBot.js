@@ -297,7 +297,7 @@ async function startMatchCommand(arguments, receivedMessage) {
 					return;
 				}
 
-				let embedDescription = "Team 1 vs Team 2\n";
+				let embedDescription = "Team 1 vs Team 2\n\n";
 				embedDescription += "Top: <@" + team1Arr[0] + "> vs <@" + team2Arr[0] + ">\n";
 				embedDescription += "Jng: <@" + team1Arr[1] + "> vs <@" + team2Arr[1] + ">\n";
 				embedDescription += "Mid: <@" + team1Arr[2] + "> vs <@" + team2Arr[2] + ">\n";
@@ -336,28 +336,34 @@ async function startMatchCommand(arguments, receivedMessage) {
 	const filter = (reaction, user) => { return ['1️⃣', '2️⃣', '❌'].includes(reaction.emoji.name) && user.id != client.user.id };
 	const collector = msg.createReactionCollector(filter, {});
 	collector.on('collect', (reaction, user) => {
-		MatchesDatabase.findOne({match_id: matchID}, async function (err,data) {
-			if(data==null){
+		MatchesDatabase.findOne({ match_id: matchID }, async function (err, data) {
+			if (data == null) {
 				return;
 			}
 			switch (reaction.emoji.name) {
 				case "1️⃣":
 					console.log("team 1 won selected from: " + user.id)
-					teamWon(msg, matchID, data.team1);
+					if(user.id == data.creator_id){
+						teamWon(msg, matchID, data.team1);
+					}
 					if (user.id != client.id) {
 						removeReaction(msg, user.id, '1️⃣');
 					}
 					break;
 				case "2️⃣":
 					console.log("team 2 won selected from: " + user.id)
-					teamWon(msg, matchID, data.team2);
+					if(user.id == data.creator_id){
+						teamWon(msg, matchID, data.team2);
+					}
 					if (user.id != client.id) {
 						removeReaction(msg, user.id, '2️⃣');
 					}
 					break;
 				case "❌":
 					console.log("❌ selected from: " + user.id)
-					msg.delete();
+					if(user.id == data.creator_id){
+						msg.delete();
+					}
 					break;
 				default:
 					console.log("something went wrong with collecting reactions")
@@ -371,36 +377,18 @@ async function startMatchCommand(arguments, receivedMessage) {
 	});
 }
 
-async function teamWon(msg, matchID, playersIdArray){
-	var i;
-	/*
-	for (i = 0; i < playersIdArray.length; i++){
-		let playerID = playersIdArray[i];
-		PlayersDatabase.findOne({player_id: playerID}, async function (err,data) {
-			if(data == null){
-				console.log("Player not found, adding to DB")
-				let userNickname = await getUserNickName(msg, client.users.cache.get(playerID));
-				//console.log(userNickname);
-				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 1, loss: 0, winteam: [], loseteam: [], number_of_mvp: 0, number_of_ace: 0 });
-			}
-			else{
-				let playersArray = playersIdArray.concat(data.winteam);
-				PlayersDatabase.update({ player_id: playerID }, { $set: { win: (data.win + 1), winteam: playersArray, nickname: userNickname } }, { multi: false }, function (err, numReplaced) { });
-			}
-		});
-	}
-	*/
+async function teamWon(msg, matchID, playersIdArray) {
 	for (let playerID of playersIdArray) {
-		//const contents = await your_query_promise();
 		PlayersDatabase.findOne({player_id: playerID}, async function (err,data) {
 			if(data == null){
 				console.log("Player not found, adding to DB")
-				//inserts 5 players lol XDDDDDDDDDD
-				let userNickname = await getUserNickName(msg, client.users.cache.get(playerID));
-				//console.log(userNickname);
-				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 1, loss: 0, winteam: [], loseteam: [], number_of_mvp: 0, number_of_ace: 0 });
+				let user = client.users.cache.get(playerID);
+				let userNickname = await getUserNickName(msg, playerID);
+				console.log(playerID);
+				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 1, loss: 0, winteam: [playersIdArray], loseteam: [], number_of_mvp: 0, number_of_ace: 0 });
 			}
 			else{
+				let userNickname = await getUserNickName(msg, playerID);
 				let playersArray = playersIdArray.concat(data.winteam);
 				PlayersDatabase.update({ player_id: playerID }, { $set: { win: (data.win + 1), winteam: playersArray, nickname: userNickname } }, { multi: false }, function (err, numReplaced) { });
 			}
@@ -608,7 +596,7 @@ async function addUserToRole(msg, embedMessage, user, role, receivedMessage) {
 					}
 					else {
 						let array = data.top;
-						array.push({ nickname: await getUserNickName(msg, user), discord_id: user.id })
+						array.push({ nickname: await getUserNickName(msg, user.id), discord_id: user.id })
 						MatchesDatabase.update({ message_id: msg.id }, { $set: { top: array } }, { multi: false });
 						await updateEmbedDescription(msg, embedMessage, data.match_id);
 					}
@@ -629,7 +617,7 @@ async function addUserToRole(msg, embedMessage, user, role, receivedMessage) {
 					}
 					else {
 						let array = data.jungle;
-						array.push({ nickname: await getUserNickName(msg, user), discord_id: user.id })
+						array.push({ nickname: await getUserNickName(msg, user.id), discord_id: user.id })
 						MatchesDatabase.update({ message_id: msg.id }, { $set: { jungle: array } }, { multi: false });
 						await updateEmbedDescription(msg, embedMessage, data.match_id);
 					}
@@ -650,7 +638,7 @@ async function addUserToRole(msg, embedMessage, user, role, receivedMessage) {
 					}
 					else {
 						let array = data.mid;
-						array.push({ nickname: await getUserNickName(msg, user), discord_id: user.id })
+						array.push({ nickname: await getUserNickName(msg, user.id), discord_id: user.id })
 						MatchesDatabase.update({ message_id: msg.id }, { $set: { mid: array } }, { multi: false });
 						await updateEmbedDescription(msg, embedMessage, data.match_id);
 					}
@@ -671,7 +659,7 @@ async function addUserToRole(msg, embedMessage, user, role, receivedMessage) {
 					}
 					else {
 						let array = data.bot;
-						array.push({ nickname: await getUserNickName(msg, user), discord_id: user.id })
+						array.push({ nickname: await getUserNickName(msg, user.id), discord_id: user.id })
 						MatchesDatabase.update({ message_id: msg.id }, { $set: { bot: array } }, { multi: false });
 						await updateEmbedDescription(msg, embedMessage, data.match_id);
 					}
@@ -692,7 +680,7 @@ async function addUserToRole(msg, embedMessage, user, role, receivedMessage) {
 					}
 					else {
 						let array = data.support;
-						array.push({ nickname: await getUserNickName(msg, user), discord_id: user.id })
+						array.push({ nickname: await getUserNickName(msg, user.id), discord_id: user.id })
 						MatchesDatabase.update({ message_id: msg.id }, { $set: { support: array } }, { multi: false });
 						await updateEmbedDescription(msg, embedMessage, data.match_id);
 					}
@@ -959,8 +947,17 @@ function getIndexOfUserFromArray(user, array) {
 	return -1;
 }
 
+/*
 async function getUserNickName(msg, user) {
 	let nickname = msg.guild.members.fetch(user.id).then(result => {
+		return result.displayName
+	});
+	return nickname;
+}
+*/
+
+async function getUserNickName(msg, userId) {
+	let nickname = msg.guild.members.fetch(userId).then(result => {
 		return result.displayName
 	});
 	return nickname;
