@@ -69,10 +69,11 @@ function processCommand(receivedMessage) {
 				break;
 			case "players":
 				printUserRoles(arguments, receivedMessage);
-				receivedMessage.delete()
+				receivedMessage.delete();
 				break;
 			case "team":
 				teamCommand(arguments, receivedMessage);
+				receivedMessage.delete();
 				break;
 			case "start":
 				startMatchCommand(arguments, receivedMessage);
@@ -240,6 +241,8 @@ function teamCommand(arguments, receivedMessage) {
 async function startMatchCommand(arguments, receivedMessage) {
 	//%start 5
 	let matchID;
+	let matchDate;
+	let newMatchTime = true;
 	if (checkIfStringIsValidInt(arguments[0])) {
 		matchID = parseInt(arguments[0]);
 	}
@@ -248,6 +251,25 @@ async function startMatchCommand(arguments, receivedMessage) {
 		//output user error message here
 		return;
 	}
+
+	if (arguments.length == 3) {
+		let timeRe = new RegExp('^(([0]?[1-9]|1[0-2])(:)([0-5][0-9]))$');
+		if (!timeRe.test(arguments[1])) {
+			receivedMessage.author.send("Invalid time, valid input HH:MM | example: 08:15");
+			return;
+		}
+		else if (arguments[2].toLowerCase() != "am" && arguments[2].toLowerCase() != "pm") {
+			receivedMessage.author.send("Invalid time argument | try \"am\" or \"pm\"");
+			return;
+		}
+		else {
+			matchDate = getDateFromHHMM(arguments[1], arguments[2]);
+		}
+	}
+	else{
+		newMatchTime = false;
+	}
+
 	const embedMessage = new Discord.MessageEmbed()
 		.setAuthor("In-House Bot | Match ID: " + arguments[0])
 		.setDescription("Processing Teams...")
@@ -282,10 +304,16 @@ async function startMatchCommand(arguments, receivedMessage) {
 				embedDescription += "Bot: <@" + team1Arr[3] + "> vs <@" + team2Arr[3] + ">\n";
 				embedDescription += "Sup: <@" + team1Arr[4] + "> vs <@" + team2Arr[4] + ">\n";
 				embedMessage.setDescription(embedDescription);
+
+				if(!newMatchTime){
+					matchDate = data.match_time;
+					console.log(matchDate.toLocaleTimeString());
+				}
+				embedMessage.setTitle("Starting at: " + matchDate.toLocaleTimeString([], {timeStyle: 'short'}));
 				msg.edit(embedMessage)
 				try {
-					sendDMToPlayers(data.team1, data.match_id);
-					sendDMToPlayers(data.team2, data.match_id);
+					sendDMToPlayers(data.team1, data.match_id, matchDate);
+					sendDMToPlayers(data.team2, data.match_id, matchDate);
 				}
 				catch {
 					console.log("error sending DM to players, perhaps player(s) is/are invalid?")
@@ -302,11 +330,11 @@ async function startMatchCommand(arguments, receivedMessage) {
 
 }
 
-function sendDMToPlayers(usersIdArray, matchID){
+function sendDMToPlayers(usersIdArray, matchID, matchDate) {
 	const rolesArray = ["Top", "Jungle", "Mid", "Bot", "Support"];
 	var i;
-	for(i = 0; i < usersIdArray.length; i++){
-		client.users.cache.get(usersIdArray[i]).send("**Match ID: " + matchID + "** starting soon! You are assigned to play: **" + rolesArray[i] + "**");
+	for (i = 0; i < usersIdArray.length; i++) {
+		client.users.cache.get(usersIdArray[i]).send("**Match ID: " + matchID + "** starting at " + matchDate.toLocaleTimeString([], {timeStyle: 'short'}) + "! You are assigned to play: **" + rolesArray[i] + "**");
 	}
 
 }
@@ -648,13 +676,34 @@ async function removeUserFromAllRoles(msg, embedMessage, user, receivedMessage) 
 	}
 }
 
-function printUserRoles(arguments, receivedMessage) {
+async function printUserRoles(arguments, receivedMessage) {
 	let matchID = arguments[0];
 	if (!checkIfStringIsValidInt(matchID)) {
 		console.log("Not a valid match ID");
 		return;
 	}
 	matchID = parseInt(arguments[0]);
+
+	const embedMessage = new Discord.MessageEmbed()
+		.setAuthor("In-House Bot")
+		.setTitle("Players for Match ID: " + arguments[0])
+		.setDescription("Processing Teams...")
+		.setFooter("Click on ❌ to delete this message")
+		.setThumbnail("https://i.imgur.com/YeRFD2H.png")
+
+	const msg = await receivedMessage.channel.send(embedMessage);
+	msg.react('❌');
+
+	const filter = (reaction, user) => { return ['❌'].includes(reaction.emoji.name) && user.id != client.user.id };
+	const collector = msg.createReactionCollector(filter, {});
+	collector.on('collect', (reaction, user) => {
+		msg.delete();
+	});
+
+	collector.on('end', collected => {
+		console.log("collection ended");
+	});
+
 	try {
 		MatchesDatabase.findOne({ match_id: matchID }, async function (err, data) {
 			if (data == null) {
@@ -672,7 +721,9 @@ function printUserRoles(arguments, receivedMessage) {
 				printMessage += "MID: " + getUserNickNamesFromArray(midArr) + "\n";
 				printMessage += "BOT: " + getUserNickNamesFromArray(botArr) + "\n";
 				printMessage += "SUP: " + getUserNickNamesFromArray(supportArr) + "\n";
-				receivedMessage.author.send("```Players for Match ID: " + data.match_id + "\n" + printMessage + "```");
+				embedMessage.setDescription("```" + printMessage + "```")
+				//receivedMessage.author.send();
+				msg.edit(embedMessage)
 			}
 		});
 	}
@@ -869,5 +920,6 @@ async function testCommand(arguments, receivedMessage) {
 	console.log(getDateFromHHMM(arguments[0],arguments[1]).toLocaleDateString());
 	console.log(getDateFromHHMM(arguments[0],arguments[1]).toLocaleTimeString());
 	*/
-	console.log(getArrayOfUsersFromMentions(arguments.slice(1)));
+	//console.log(getArrayOfUsersFromMentions(arguments.slice(1)));
+	console.log(arguments.length)
 }
