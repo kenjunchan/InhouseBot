@@ -1,8 +1,9 @@
 const Discord = require('discord.js')
 const client = new Discord.Client();
-client.login("") //Discord Token Here
-
+const table = require('table');
 const Datastore = require('nedb');
+
+client.login("") //Discord Token Here
 
 //Load Database
 const MatchesDatabase = new Datastore('MatchesDatastore.db');
@@ -1012,7 +1013,41 @@ function getArrayOfUsersFromMentions(mentions, receivedMessage) {
 }
 
 function leaderboardCommand(arguments, receivedMessage) {
+	try {
+		if (arguments[0] == "all") {
+			limit = Number.MAX_SAFE_INTEGER
+		}
+		else if (arguments[0] == null) {
+			limit = 10;
+		}
+		else if (!checkIfStringIsValidInt(arguments[0])) {
+			receivedMessage.channel.send("not a valid number!\n\!p leaderboard <number>")
+			return;
+		}
+		else {
+			limit = parseInt(arguments[0])
+		}
 
+		PlayersDatabase.find({}).sort({ win_rate: -1, number_of_mvp: -1, number_of_ace: -1 }).exec(function (err, data) {
+			if (data != null) {
+				let amt = 0;
+				fields = [["Name", "Winrate %", "# of MVPs", "# of ACEs"]];
+				data.forEach(function (item) {
+					if (amt < limit) {
+						fields.push([item.nickname, item.win_rate, item.number_of_mvp, item.number_of_ace]);
+						amt++;
+					}
+				});
+				receivedMessage.channel.send("\n" + table.table(fields) + "\n");
+			}
+			else {
+				receivedMessage.channel.send("DB error, perhaps it's empty?");
+			}
+		});
+	}
+	catch (err) {
+		receivedMessage.channel.send("Something went wrong");
+	}
 }
 
 function statsCommand(arguments, receivedMessage){
