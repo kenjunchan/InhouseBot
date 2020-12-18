@@ -1021,7 +1021,7 @@ function leaderboardCommand(arguments, receivedMessage) {
 			limit = 10;
 		}
 		else if (!checkIfStringIsValidInt(arguments[0])) {
-			receivedMessage.channel.send("not a valid number!\n\!p leaderboard <number>")
+			receivedMessage.channel.send("not a valid number!\n\!leaderboard <number>")
 			return;
 		}
 		else {
@@ -1031,14 +1031,14 @@ function leaderboardCommand(arguments, receivedMessage) {
 		PlayersDatabase.find({}).sort({ win_rate: -1, number_of_mvp: -1, number_of_ace: -1 }).exec(function (err, data) {
 			if (data != null) {
 				let amt = 0;
-				fields = [["Name", "Winrate %", "# of MVPs", "# of ACEs"]];
+				fields = [["Name", "Winrate %", "Wins", "Losses", "# of MVPs", "# of ACEs"]];
 				data.forEach(function (item) {
 					if (amt < limit) {
-						fields.push([item.nickname, item.win_rate, item.number_of_mvp, item.number_of_ace]);
+						fields.push([item.nickname, (Math.floor(item.win_rate * 100) + "%"), item.win, item.loss, item.number_of_mvp, item.number_of_ace]);
 						amt++;
 					}
 				});
-				receivedMessage.channel.send("\n" + table.table(fields) + "\n");
+				receivedMessage.channel.send("```\n" + table.table(fields) + "\n```");
 			}
 			else {
 				receivedMessage.channel.send("DB error, perhaps it's empty?");
