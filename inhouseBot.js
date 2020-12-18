@@ -345,6 +345,7 @@ async function startMatchCommand(arguments, receivedMessage) {
 					console.log("team 1 won selected from: " + user.id)
 					if(user.id == data.creator_id){
 						teamWon(msg, matchID, data.team1);
+						teamLose(msg, matchID, data.team2);
 					}
 					if (user.id != client.id) {
 						removeReaction(msg, user.id, '1️⃣');
@@ -354,6 +355,7 @@ async function startMatchCommand(arguments, receivedMessage) {
 					console.log("team 2 won selected from: " + user.id)
 					if(user.id == data.creator_id){
 						teamWon(msg, matchID, data.team2);
+						teamLose(msg, matchID, data.team1);
 					}
 					if (user.id != client.id) {
 						removeReaction(msg, user.id, '2️⃣');
@@ -384,13 +386,32 @@ async function teamWon(msg, matchID, playersIdArray) {
 				console.log("Player not found, adding to DB")
 				let user = client.users.cache.get(playerID);
 				let userNickname = await getUserNickName(msg, playerID);
-				console.log(playerID);
+				//console.log(playerID);
 				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 1, loss: 0, winteam: [playersIdArray], loseteam: [], number_of_mvp: 0, number_of_ace: 0 });
 			}
 			else{
 				let userNickname = await getUserNickName(msg, playerID);
 				let playersArray = playersIdArray.concat(data.winteam);
 				PlayersDatabase.update({ player_id: playerID }, { $set: { win: (data.win + 1), winteam: playersArray, nickname: userNickname } }, { multi: false }, function (err, numReplaced) { });
+			}
+		});
+	}
+}
+
+async function teamLose(msg, matchID, playersIdArray) {
+	for (let playerID of playersIdArray) {
+		PlayersDatabase.findOne({player_id: playerID}, async function (err,data) {
+			if(data == null){
+				console.log("Player not found, adding to DB")
+				let user = client.users.cache.get(playerID);
+				let userNickname = await getUserNickName(msg, playerID);
+				//console.log(playerID);
+				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 0, loss: 1, winteam: [], loseteam: [playersIdArray], number_of_mvp: 0, number_of_ace: 0 });
+			}
+			else{
+				let userNickname = await getUserNickName(msg, playerID);
+				let playersArray = playersIdArray.concat(data.winteam);
+				PlayersDatabase.update({ player_id: playerID }, { $set: { loss: (data.loss + 1), loseteam: playersArray, nickname: userNickname } }, { multi: false }, function (err, numReplaced) { });
 			}
 		});
 	}
