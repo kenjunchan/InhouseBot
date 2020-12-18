@@ -43,7 +43,6 @@ function listAllConnectedServersAndChannels() {
 
 }
 
-
 function processCommand(receivedMessage) {
 	let fullCommand = receivedMessage.content.substr(1) // Remove the leading exclamation mark
 	let splitCommand = fullCommand.split(" ") // Split the message up in to pieces for each space
@@ -77,6 +76,7 @@ function processCommand(receivedMessage) {
 				break;
 			case "start":
 				startMatchCommand(arguments, receivedMessage);
+				receivedMessage.delete();
 				break;
 			case "roles":
 				rolesCommand(arguments, receivedMessage);
@@ -239,7 +239,6 @@ function teamCommand(arguments, receivedMessage) {
 }
 
 async function startMatchCommand(arguments, receivedMessage) {
-	//%start 5
 	let matchID;
 	let matchDate;
 	let newMatchTime = true;
@@ -266,19 +265,18 @@ async function startMatchCommand(arguments, receivedMessage) {
 			matchDate = getDateFromHHMM(arguments[1], arguments[2]);
 		}
 	}
-	else{
+	else {
 		newMatchTime = false;
 	}
 
 	const embedMessage = new Discord.MessageEmbed()
 		.setAuthor("In-House Bot | Match ID: " + arguments[0])
 		.setDescription("Processing Teams...")
-		//.setFooter("React to sign-up for role(s), click ❌ to unsign-up, ❓ to get your role(s)")
+		//.setFooter("")
 		.setThumbnail("https://i.imgur.com/YeRFD2H.png")
-	//.setTitle("")
 
 	const msg = await receivedMessage.channel.send(embedMessage);
-	//client.users.cache.get('<id>').send('<message>');
+
 	try {
 		MatchesDatabase.findOne({ match_id: matchID }, async function (err, data) {
 			if (data == null) {
@@ -290,14 +288,16 @@ async function startMatchCommand(arguments, receivedMessage) {
 
 				if (team1Arr.length != 5) {
 					console.log("team 1 invalid");
+					msg.delete();
 					return;
 				}
 				else if (team2Arr.length != 5) {
 					console.log("team 2 invalid");
+					msg.delete();
 					return;
 				}
 
-				let embedDescription = "\n";
+				let embedDescription = "Team 1 vs Team 2\n";
 				embedDescription += "Top: <@" + team1Arr[0] + "> vs <@" + team2Arr[0] + ">\n";
 				embedDescription += "Jng: <@" + team1Arr[1] + "> vs <@" + team2Arr[1] + ">\n";
 				embedDescription += "Mid: <@" + team1Arr[2] + "> vs <@" + team2Arr[2] + ">\n";
@@ -305,12 +305,13 @@ async function startMatchCommand(arguments, receivedMessage) {
 				embedDescription += "Sup: <@" + team1Arr[4] + "> vs <@" + team2Arr[4] + ">\n";
 				embedMessage.setDescription(embedDescription);
 
-				if(!newMatchTime){
+				if (!newMatchTime) {
 					matchDate = data.match_time;
-					console.log(matchDate.toLocaleTimeString());
+					//console.log(matchDate.toLocaleTimeString());
 				}
-				embedMessage.setTitle("Starting at: " + matchDate.toLocaleTimeString([], {timeStyle: 'short'}));
-				msg.edit(embedMessage)
+				MatchesDatabase.update({ match_id: matchID }, { $set: { match_time: matchDate } }, { multi: false }, function (err, numReplaced) { console.log("Changed match time") });
+				embedMessage.setTitle("Starting at: " + matchDate.toLocaleTimeString([], { timeStyle: 'short' }));
+				await msg.edit(embedMessage)
 				try {
 					sendDMToPlayers(data.team1, data.match_id, matchDate);
 					sendDMToPlayers(data.team2, data.match_id, matchDate);
@@ -318,6 +319,7 @@ async function startMatchCommand(arguments, receivedMessage) {
 				catch {
 					console.log("error sending DM to players, perhaps player(s) is/are invalid?")
 				}
+
 			}
 		});
 	}
@@ -326,15 +328,91 @@ async function startMatchCommand(arguments, receivedMessage) {
 		return;
 	}
 
+	msg.react('1️⃣')
+		.then(() => msg.react('2️⃣'))
+		.then(() => msg.react('❌'))
+		.catch(() => console.error('One of the emojis failed to react.'));
 
+	const filter = (reaction, user) => { return ['1️⃣', '2️⃣', '❌'].includes(reaction.emoji.name) && user.id != client.user.id };
+	const collector = msg.createReactionCollector(filter, {});
+	collector.on('collect', (reaction, user) => {
+		MatchesDatabase.findOne({match_id: matchID}, async function (err,data) {
+			if(data==null){
+				return;
+			}
+			switch (reaction.emoji.name) {
+				case "1️⃣":
+					console.log("team 1 won selected from: " + user.id)
+					teamWon(msg, matchID, data.team1);
+					if (user.id != client.id) {
+						removeReaction(msg, user.id, '1️⃣');
+					}
+					break;
+				case "2️⃣":
+					console.log("team 2 won selected from: " + user.id)
+					teamWon(msg, matchID, data.team2);
+					if (user.id != client.id) {
+						removeReaction(msg, user.id, '2️⃣');
+					}
+					break;
+				case "❌":
+					console.log("❌ selected from: " + user.id)
+					msg.delete();
+					break;
+				default:
+					console.log("something went wrong with collecting reactions")
+					break;
+			}
+		});
+	});
 
+	collector.on('end', collected => {
+		console.log("collection ended");
+	});
+}
+
+async function teamWon(msg, matchID, playersIdArray){
+	var i;
+	/*
+	for (i = 0; i < playersIdArray.length; i++){
+		let playerID = playersIdArray[i];
+		PlayersDatabase.findOne({player_id: playerID}, async function (err,data) {
+			if(data == null){
+				console.log("Player not found, adding to DB")
+				let userNickname = await getUserNickName(msg, client.users.cache.get(playerID));
+				//console.log(userNickname);
+				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 1, loss: 0, winteam: [], loseteam: [], number_of_mvp: 0, number_of_ace: 0 });
+			}
+			else{
+				let playersArray = playersIdArray.concat(data.winteam);
+				PlayersDatabase.update({ player_id: playerID }, { $set: { win: (data.win + 1), winteam: playersArray, nickname: userNickname } }, { multi: false }, function (err, numReplaced) { });
+			}
+		});
+	}
+	*/
+	for (let playerID of playersIdArray) {
+		//const contents = await your_query_promise();
+		PlayersDatabase.findOne({player_id: playerID}, async function (err,data) {
+			if(data == null){
+				console.log("Player not found, adding to DB")
+				//inserts 5 players lol XDDDDDDDDDD
+				let userNickname = await getUserNickName(msg, client.users.cache.get(playerID));
+				//console.log(userNickname);
+				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 1, loss: 0, winteam: [], loseteam: [], number_of_mvp: 0, number_of_ace: 0 });
+			}
+			else{
+				let playersArray = playersIdArray.concat(data.winteam);
+				PlayersDatabase.update({ player_id: playerID }, { $set: { win: (data.win + 1), winteam: playersArray, nickname: userNickname } }, { multi: false }, function (err, numReplaced) { });
+			}
+		});
+	}
 }
 
 function sendDMToPlayers(usersIdArray, matchID, matchDate) {
 	const rolesArray = ["Top", "Jungle", "Mid", "Bot", "Support"];
 	var i;
 	for (i = 0; i < usersIdArray.length; i++) {
-		client.users.cache.get(usersIdArray[i]).send("**Match ID: " + matchID + "** starting at " + matchDate.toLocaleTimeString([], {timeStyle: 'short'}) + "! You are assigned to play: **" + rolesArray[i] + "**");
+		//client.users.cache.get(usersIdArray[i]).send("**Match ID: " + matchID + "** starting at " + matchDate.toLocaleTimeString([], { timeStyle: 'short' }) + "! You are assigned to play: **" + rolesArray[i] + "**");
 	}
 
 }
