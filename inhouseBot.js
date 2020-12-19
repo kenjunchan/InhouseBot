@@ -79,6 +79,10 @@ function processCommand(receivedMessage) {
 				startMatchCommand(arguments, receivedMessage);
 				receivedMessage.delete();
 				break;
+			case "mvpa":
+				mvpaCommand(arguments, receivedMessage);
+				receivedMessage.delete();
+				break;
 			case "roles":
 				rolesCommand(arguments, receivedMessage);
 				break;
@@ -93,6 +97,7 @@ function processCommand(receivedMessage) {
 				helpCommand(arguments, receivedMessage);
 				receivedMessage.delete();
 				break;
+
 			default:
 				receivedMessage.author.send("type %help to get the list of commands");
 				break;
@@ -431,11 +436,15 @@ async function teamLose(msg, matchID, playersIdArray) {
 	compactDatabases();
 }
 
+async function mvpaCommand(arguments, receivedMessage){
+
+}
+
 function sendDMToPlayers(usersIdArray, matchID, matchDate) {
 	const rolesArray = ["Top", "Jungle", "Mid", "Bot", "Support"];
 	var i;
 	for (i = 0; i < usersIdArray.length; i++) {
-		//client.users.cache.get(usersIdArray[i]).send("**Match ID: " + matchID + "** starting at " + matchDate.toLocaleTimeString([], { timeStyle: 'short' }) + "! You are assigned to play: **" + rolesArray[i] + "**");
+		client.users.cache.get(usersIdArray[i]).send("**Match ID: " + matchID + "** starting at " + matchDate.toLocaleTimeString([], { timeStyle: 'short' }) + "! You are assigned to play: **" + rolesArray[i] + "**");
 	}
 
 }
@@ -1035,11 +1044,13 @@ function leaderboardCommand(arguments, receivedMessage) {
 		PlayersDatabase.find({}).sort({ win_rate: -1, number_of_mvp: -1, number_of_ace: -1 }).exec(function (err, data) {
 			if (data != null) {
 				let amt = 0;
-				fields = [["Name", "W/L | %", "MVPs", "ACEs"]];
+				//fields = [["Name", "W/L | %", "MVPs", "ACEs"]];
+				fields = [["Name", "W/L | %"]];
 				data.forEach(function (item) {
 					if (amt < limit) {
 						let winrateString = (Math.floor(item.win_rate * 100) + "%");
-						fields.push([item.nickname, (item.win + "W/" + item.loss + "L | " + winrateString), item.number_of_mvp, item.number_of_ace]);
+						//fields.push([item.nickname, (item.win + "W/" + item.loss + "L | " + winrateString), item.number_of_mvp, item.number_of_ace]);
+						fields.push([item.nickname, (item.win + "W/" + item.loss + "L | " + winrateString)]);
 						amt++;
 					}
 				});
@@ -1071,4 +1082,5 @@ async function compactDatabases(){
 async function testCommand(arguments, receivedMessage) {
 	//MatchesDatabase.persistence.compactDatafile();
 	//PlayersDatabase.persistence.compactDatafile();
+	MatchesDatabase.insert({match_id: 0, LAST_MATCH_ID: 0});
 }
