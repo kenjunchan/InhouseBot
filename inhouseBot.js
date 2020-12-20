@@ -118,7 +118,7 @@ async function createMatch(arguments, receivedMessage) {
 	const embedMessage = new Discord.MessageEmbed()
 		.setAuthor("In-House Bot")
 		.setDescription("Processing Match...")
-		.setFooter("React to sign-up for role(s), click ❌ to unsign-up, ❓ to get your role(s)")
+		.setFooter("React to sign-up for role(s), ❓ to get your role(s)")
 		.setThumbnail("https://i.imgur.com/YeRFD2H.png")
 	let embedMessageTitle = "";
 	if (arguments[0] == "fun") {
@@ -143,7 +143,7 @@ async function createMatch(arguments, receivedMessage) {
 		.then(() => msg.react('🇲'))
 		.then(() => msg.react('🇧'))
 		.then(() => msg.react('🇸'))
-		.then(() => msg.react('❌'))
+		//.then(() => msg.react('❌'))
 		.then(() => msg.react('❓'))
 		.catch(() => console.error('One of the emojis failed to react.'));
 
@@ -152,7 +152,7 @@ async function createMatch(arguments, receivedMessage) {
 	let currentDate = new Date();
 	let matchTime = getDateFromHHMM(arguments[1], arguments[2]);
 	let timeOutTime = Math.abs(currentDate.getTime() - matchTime.getTime()) + matchCloseSignupDelay;
-	const filter = (reaction, user) => { return ['🇹', '🇯', '🇲', '🇧', '🇸', '❌', '❓'].includes(reaction.emoji.name) && user.id != client.user.id };
+	const filter = (reaction, user) => { return ['🇹', '🇯', '🇲', '🇧', '🇸', '❓'].includes(reaction.emoji.name) && user.id != client.user.id };
 	const collector = msg.createReactionCollector(filter, { time: timeOutTime, dispose: true });
 
 	collector.on('collect', (reaction, user) => {
@@ -178,11 +178,13 @@ async function createMatch(arguments, receivedMessage) {
 				console.log("support selected from: " + user.id)
 				addUserToRole(msg, embedMessage, user, "support", receivedMessage);
 				break;
+				/*
 			case "❌":
 				console.log("cancel selected from: " + user.id)
 				removeUserFromAllRoles(msg, embedMessage, user, receivedMessage);
 				removeReactions(msg, user.id);
 				break;
+				*/
 			case "❓":
 				console.log("❓ selected from: " + user.id)
 				sendSelectedRoles(msg, user);
@@ -932,6 +934,8 @@ async function removeUserFromAllRoles(msg, embedMessage, user, receivedMessage) 
 }
 
 async function printUserRoles(arguments, receivedMessage) {
+	let authorID = receivedMessage.author.id;
+	console.log(authorID);
 	let matchID = arguments[0];
 	if (!checkIfStringIsValidInt(matchID)) {
 		console.log("Not a valid match ID");
@@ -943,22 +947,41 @@ async function printUserRoles(arguments, receivedMessage) {
 		.setAuthor("In-House Bot")
 		.setTitle("Players for Match ID: " + arguments[0])
 		.setDescription("Processing Teams...")
-		.setFooter("Click on ❌ to delete this message")
+		.setFooter("Click on 🔄 to refresh players, ❌ to delete this message")
 		.setThumbnail("https://i.imgur.com/YeRFD2H.png")
 
 	const msg = await receivedMessage.channel.send(embedMessage);
-	msg.react('❌');
+	msg.react('🔄')
+	.then(() => msg.react('❌'))
+	.catch(() => console.error('One of the emojis failed to react.'));
 
-	const filter = (reaction, user) => { return ['❌'].includes(reaction.emoji.name) && user.id != client.user.id };
+
+	const filter = (reaction, user) => { return ['❌','🔄'].includes(reaction.emoji.name) && user.id != client.user.id };
 	const collector = msg.createReactionCollector(filter, {});
 	collector.on('collect', (reaction, user) => {
-		msg.delete();
+		switch (reaction.emoji.name) {
+			case "❌":
+				if(user.id == authorID){
+					msg.delete();
+				}
+				removeReaction(msg, user.id, '❌');
+				break;
+			case "🔄":
+				updatePrintUserRoles(msg, embedMessage, matchID);
+				removeReaction(msg, user.id, '🔄');
+				break;
+			default:
+				console.log("something went wrong with collecting reactions")
+				break;
+		}
 	});
 
 	collector.on('end', collected => {
 		console.log("collection ended");
 	});
 
+	updatePrintUserRoles(msg, embedMessage, matchID);
+	/*
 	try {
 		MatchesDatabase.findOne({ match_id: matchID }, async function (err, data) {
 			if (data == null) {
@@ -985,7 +1008,36 @@ async function printUserRoles(arguments, receivedMessage) {
 	catch {
 		console.log("Error trying to print all players from match ID");
 	}
+	*/
+}
 
+function updatePrintUserRoles(msg, embedMessage, matchID){
+	try {
+		MatchesDatabase.findOne({ match_id: matchID }, async function (err, data) {
+			if (data == null) {
+				console.log("no data found")
+			}
+			else {
+				let printMessage = "";
+				let topArr = data.top;
+				let jungleArr = data.jungle;
+				let midArr = data.mid;
+				let botArr = data.bot;
+				let supportArr = data.support;
+				printMessage += "TOP: " + getUserNickNamesFromArray(topArr) + "\n";
+				printMessage += "JNG: " + getUserNickNamesFromArray(jungleArr) + "\n";
+				printMessage += "MID: " + getUserNickNamesFromArray(midArr) + "\n";
+				printMessage += "BOT: " + getUserNickNamesFromArray(botArr) + "\n";
+				printMessage += "SUP: " + getUserNickNamesFromArray(supportArr) + "\n";
+				embedMessage.setDescription("```" + printMessage + "```");
+				//receivedMessage.author.send();
+				msg.edit(embedMessage)
+			}
+		});
+	}
+	catch {
+		console.log("Error trying to print all players from match ID");
+	}
 }
 
 function sendSelectedRoles(msg, user) {
