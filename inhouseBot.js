@@ -1279,5 +1279,5 @@ async function compactDatabases() {
 async function testCommand(arguments, receivedMessage) {
 	//MatchesDatabase.persistence.compactDatafile();
 	//PlayersDatabase.persistence.compactDatafile();
-	MatchesDatabase.insert({ match_id: 0, LAST_MATCH_ID: 0 });
+	//MatchesDatabase.insert({ match_id: 0, LAST_MATCH_ID: 0 });
 }
