@@ -153,7 +153,8 @@ async function createMatch(arguments, receivedMessage) {
 	let matchTime = getDateFromHHMM(arguments[1], arguments[2]);
 	let timeOutTime = Math.abs(currentDate.getTime() - matchTime.getTime()) + matchCloseSignupDelay;
 	const filter = (reaction, user) => { return ['🇹', '🇯', '🇲', '🇧', '🇸', '❌', '❓'].includes(reaction.emoji.name) && user.id != client.user.id };
-	const collector = msg.createReactionCollector(filter, { time: timeOutTime });
+	const collector = msg.createReactionCollector(filter, { time: timeOutTime, dispose: true });
+
 	collector.on('collect', (reaction, user) => {
 		console.log("collected reaction: " + reaction.emoji.name)
 		switch (reaction.emoji.name) {
@@ -191,6 +192,48 @@ async function createMatch(arguments, receivedMessage) {
 				break;
 			default:
 				console.log("something went wrong with collecting reactions")
+				break;
+		}
+	});
+
+	collector.on('remove', (reaction, user) => {
+		console.log("collected reaction: " + reaction.emoji.name)
+		switch (reaction.emoji.name) {
+			case "🇹":
+				console.log("removed reaction: " + user.id)
+				removeUserFromRole(msg, embedMessage, user, receivedMessage, "top");
+				break;
+			case "🇯":
+				console.log("jungle removed from: " + user.id)
+				removeUserFromRole(msg, embedMessage, user, receivedMessage, "jungle");
+				break;
+			case "🇲":
+				console.log("mid removed from: " + user.id)
+				removeUserFromRole(msg, embedMessage, user, receivedMessage, "mid");
+				break;
+			case "🇧":
+				console.log("bot removed from: " + user.id)
+				removeUserFromRole(msg, embedMessage, user, receivedMessage, "bot");
+				break;
+			case "🇸":
+				console.log("support removed from: " + user.id)
+				removeUserFromRole(msg, embedMessage, user, receivedMessage, "support");
+				break;
+			/*case "❌":
+				console.log("cancel selected from: " + user.id)
+				removeUserFromAllRoles(msg, embedMessage, user, receivedMessage);
+				removeReactions(msg, user.id);
+				break;
+			case "❓":
+				console.log("❓ selected from: " + user.id)
+				sendSelectedRoles(msg, user);
+				if (user.id != client.id) {
+					removeReaction(msg, user.id, '❓');
+				}
+				break;
+				*/
+			default:
+				console.log("something went wrong with collecting remove reactions")
 				break;
 		}
 	});
@@ -357,7 +400,7 @@ async function startMatchCommand(arguments, receivedMessage) {
 			switch (reaction.emoji.name) {
 				case "1️⃣":
 					console.log("team 1 won selected from: " + user.id)
-					if(user.id == data.creator_id && data.serious){
+					if (user.id == data.creator_id && data.serious) {
 						teamWon(msg, matchID, data.team1);
 						teamLose(msg, matchID, data.team2);
 					}
@@ -367,7 +410,7 @@ async function startMatchCommand(arguments, receivedMessage) {
 					break;
 				case "2️⃣":
 					console.log("team 2 won selected from: " + user.id)
-					if(user.id == data.creator_id && data.serious){
+					if (user.id == data.creator_id && data.serious) {
 						teamWon(msg, matchID, data.team2);
 						teamLose(msg, matchID, data.team1);
 					}
@@ -377,7 +420,7 @@ async function startMatchCommand(arguments, receivedMessage) {
 					break;
 				case "❌":
 					console.log("❌ selected from: " + user.id)
-					if(user.id == data.creator_id){
+					if (user.id == data.creator_id) {
 						msg.delete();
 					}
 					break;
@@ -395,19 +438,19 @@ async function startMatchCommand(arguments, receivedMessage) {
 
 async function teamWon(msg, matchID, playersIdArray) {
 	for (let playerID of playersIdArray) {
-		PlayersDatabase.findOne({player_id: playerID}, async function (err,data) {
-			if(data == null){
+		PlayersDatabase.findOne({ player_id: playerID }, async function (err, data) {
+			if (data == null) {
 				console.log("Player not found, adding to DB")
 				//let user = client.users.cache.get(playerID);
 				let userNickname = await getUserNickName(msg, playerID);
 				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 1, loss: 0, win_rate: 1.0, winteam: [playersIdArray], loseteam: [], number_of_mvp: 0, number_of_ace: 0 });
 			}
-			else{
+			else {
 				let userNickname = await getUserNickName(msg, playerID);
 				let playersArray = playersIdArray.concat(data.winteam);
 				let numberOfWins = (data.win + 1)
 				let numberOfLoss = data.loss;
-				let winrate = numberOfWins/(numberOfWins+numberOfLoss);
+				let winrate = numberOfWins / (numberOfWins + numberOfLoss);
 				PlayersDatabase.update({ player_id: playerID }, { $set: { win: numberOfWins, win_rate: winrate, winteam: playersArray, nickname: userNickname } }, { multi: false }, function (err, numReplaced) { });
 			}
 		});
@@ -417,18 +460,18 @@ async function teamWon(msg, matchID, playersIdArray) {
 
 async function teamLose(msg, matchID, playersIdArray) {
 	for (let playerID of playersIdArray) {
-		PlayersDatabase.findOne({player_id: playerID}, async function (err,data) {
-			if(data == null){
+		PlayersDatabase.findOne({ player_id: playerID }, async function (err, data) {
+			if (data == null) {
 				console.log("Player not found, adding to DB")
 				let userNickname = await getUserNickName(msg, playerID);
 				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 0, loss: 1, win_rate: 0.0, winteam: [], loseteam: [playersIdArray], number_of_mvp: 0, number_of_ace: 0 });
 			}
-			else{
+			else {
 				let userNickname = await getUserNickName(msg, playerID);
 				let playersArray = playersIdArray.concat(data.winteam);
 				let numberOfWins = data.win;
 				let numberOfLoss = (data.loss + 1);
-				let winrate = numberOfWins/(numberOfWins+numberOfLoss);
+				let winrate = numberOfWins / (numberOfWins + numberOfLoss);
 				PlayersDatabase.update({ player_id: playerID }, { $set: { loss: numberOfLoss, win_rate: winrate, loseteam: playersArray, nickname: userNickname } }, { multi: false }, function (err, numReplaced) { });
 			}
 		});
@@ -436,7 +479,7 @@ async function teamLose(msg, matchID, playersIdArray) {
 	compactDatabases();
 }
 
-async function mvpaCommand(arguments, receivedMessage){
+async function mvpaCommand(arguments, receivedMessage) {
 
 }
 
@@ -617,7 +660,7 @@ async function addUserToRole(msg, embedMessage, user, role, receivedMessage) {
 				console.log("no data found")
 			}
 			else {
-				if (!isUserInArray(user, data.top) && !isUserInArray(user, data.jungle) && !isUserInArray(user, data.mid) & !isUserInArray(user, data.bot) && !isUserInArray(user, data.support)) {
+				if (!isUserInArray(user, data.top) && !isUserInArray(user, data.jungle) && !isUserInArray(user, data.mid) && !isUserInArray(user, data.bot) && !isUserInArray(user, data.support)) {
 					console.log("PLAYER DID NOT SIGN UP");
 					MatchesDatabase.update({ message_id: msg.id }, { $inc: { number_of_players: 1 } }, { multi: false });
 				}
@@ -736,6 +779,108 @@ async function addUserToRole(msg, embedMessage, user, role, receivedMessage) {
 			break;
 	}
 
+}
+
+
+async function removeUserFromRole(msg, embedMessage, user, receivedMessage, role) {
+	try {
+		MatchesDatabase.findOne({ message_id: msg.id }, async function (err, data) {
+			if (data == null) {
+				console.log("no data found")
+			}
+			else {
+				let updateDatabase = false;
+				if (role == "top") {
+					let topArr = data.top;
+					if (getIndexOfUserFromArray(user, topArr) > -1) {
+						//updateDatabase = true;
+						topArr.splice(getIndexOfUserFromArray(user, topArr), 1)
+						let numPlayers = data.number_of_players;
+						//MatchesDatabase.update({ message_id: msg.id }, { $set: { top: topArr, number_of_players: numPlayers - 1 } }, { multi: false });
+						if (!(isUserInArray(user, data.top) || isUserInArray(user, data.jungle) || isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support))) {
+							MatchesDatabase.update({ message_id: msg.id }, { $set: { top: topArr, number_of_players: numPlayers - 1 } }, { multi: false });
+						}
+						else{
+							MatchesDatabase.update({ message_id: msg.id }, { $set: { top: topArr} }, { multi: false });
+						}
+						updateEmbedDescription(msg, embedMessage, data.match_id);
+					}
+				}
+				else if (role == "jungle") {
+					let jungleArr = data.jungle;
+					if (getIndexOfUserFromArray(user, jungleArr) > -1) {
+						updateDatabase = true;
+						jungleArr.splice(getIndexOfUserFromArray(user, jungleArr), 1)
+						let numPlayers = data.number_of_players;
+						if (!(isUserInArray(user, data.top) || isUserInArray(user, data.jungle) || isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support))){
+							MatchesDatabase.update({ message_id: msg.id }, { $set: { jungle: jungleArr, number_of_players: numPlayers - 1 } }, { multi: false });
+						}
+						else{
+							MatchesDatabase.update({ message_id: msg.id }, { $set: { jungle: jungleArr } }, { multi: false });
+						}
+						updateEmbedDescription(msg, embedMessage, data.match_id);
+					}
+				}
+				else if (role == "mid") {
+					let midArr = data.mid;
+					if (getIndexOfUserFromArray(user, midArr) > -1) {
+						updateDatabase = true;
+						midArr.splice(getIndexOfUserFromArray(user, midArr), 1)
+						let numPlayers = data.number_of_players;
+						if (!(isUserInArray(user, data.top) || isUserInArray(user, data.jungle) || isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support))){
+							MatchesDatabase.update({ message_id: msg.id }, { $set: { mid: midArr, number_of_players: numPlayers - 1 } }, { multi: false });
+						}
+						else{
+							MatchesDatabase.update({ message_id: msg.id }, { $set: { mid: midArr } }, { multi: false });
+						}
+						updateEmbedDescription(msg, embedMessage, data.match_id);
+					}
+				}
+				else if (role == "bot") {
+					let botArr = data.bot;
+					if (getIndexOfUserFromArray(user, botArr) > -1) {
+						updateDatabase = true;
+						botArr.splice(getIndexOfUserFromArray(user, botArr), 1)
+						let numPlayers = data.number_of_players;
+						if (!(isUserInArray(user, data.top) || isUserInArray(user, data.jungle) || isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support))){
+							MatchesDatabase.update({ message_id: msg.id }, { $set: { bot: botArr, number_of_players: numPlayers - 1 } }, { multi: false });
+						}
+						else{
+							MatchesDatabase.update({ message_id: msg.id }, { $set: { bot: botArr } }, { multi: false });
+						}
+						updateEmbedDescription(msg, embedMessage, data.match_id);
+					}
+				}
+				else if (role == "support") {
+					let supportArr = data.support;
+					if (getIndexOfUserFromArray(user, supportArr) > -1) {
+						updateDatabase = true;
+						supportArr.splice(getIndexOfUserFromArray(user, supportArr), 1)
+						let numPlayers = data.number_of_players;
+						if (!(isUserInArray(user, data.top) || isUserInArray(user, data.jungle) || isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support))){
+							MatchesDatabase.update({ message_id: msg.id }, { $set: { support: supportArr, number_of_players: numPlayers - 1 } }, { multi: false });
+						}
+						else{
+							MatchesDatabase.update({ message_id: msg.id }, { $set: { support: supportArr } }, { multi: false });
+						}
+						updateEmbedDescription(msg, embedMessage, data.match_id);
+					}
+				}
+				/*
+				if (updateDatabase) {
+					let numPlayers = data.number_of_players;
+					MatchesDatabase.update({ message_id: msg.id }, { $set: { top: topArr, jungle: jungleArr, mid: midArr, bot: botArr, support: supportArr, number_of_players: numPlayers - 1 } }, { multi: false });
+					updateEmbedDescription(msg, embedMessage, data.match_id);
+				}
+				*/
+
+			}
+		});
+
+	}
+	catch {
+		console.log("Error removing user: " + user.id + " from all roles");
+	}
 }
 
 async function removeUserFromAllRoles(msg, embedMessage, user, receivedMessage) {
@@ -1066,15 +1211,15 @@ function leaderboardCommand(arguments, receivedMessage) {
 	}
 }
 
-function statsCommand(arguments, receivedMessage){
+function statsCommand(arguments, receivedMessage) {
 
-	if (arguments.length == 1){
+	if (arguments.length == 1) {
 
 	}
 
-} 
+}
 
-async function compactDatabases(){
+async function compactDatabases() {
 	MatchesDatabase.persistence.compactDatafile();
 	PlayersDatabase.persistence.compactDatafile();
 }
@@ -1082,5 +1227,5 @@ async function compactDatabases(){
 async function testCommand(arguments, receivedMessage) {
 	//MatchesDatabase.persistence.compactDatafile();
 	//PlayersDatabase.persistence.compactDatafile();
-	MatchesDatabase.insert({match_id: 0, LAST_MATCH_ID: 0});
+	MatchesDatabase.insert({ match_id: 0, LAST_MATCH_ID: 0 });
 }
