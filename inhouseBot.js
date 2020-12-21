@@ -783,7 +783,6 @@ async function addUserToRole(msg, embedMessage, user, role, receivedMessage) {
 
 }
 
-
 async function removeUserFromRole(msg, embedMessage, user, receivedMessage, role) {
 	try {
 		MatchesDatabase.findOne({ message_id: msg.id }, async function (err, data) {
@@ -1241,13 +1240,11 @@ function leaderboardCommand(arguments, receivedMessage) {
 		PlayersDatabase.find({}).sort({ win_rate: -1, number_of_mvp: -1, number_of_ace: -1 }).exec(function (err, data) {
 			if (data != null) {
 				let amt = 0;
-				//fields = [["Name", "W/L | %", "MVPs", "ACEs"]];
-				fields = [["Name", "W/L | %"]];
+				fields = [["#", "Name", "W/L | %", "MVPs", "ACEs"]];
 				data.forEach(function (item) {
 					if (amt < limit) {
 						let winrateString = (Math.floor(item.win_rate * 100) + "%");
-						//fields.push([item.nickname, (item.win + "W/" + item.loss + "L | " + winrateString), item.number_of_mvp, item.number_of_ace]);
-						fields.push([item.nickname, (item.win + "W/" + item.loss + "L | " + winrateString)]);
+						fields.push([amt + 1, item.nickname, (item.win + "W/" + item.loss + "L | " + winrateString), item.number_of_mvp, item.number_of_ace]);
 						amt++;
 					}
 				});
