@@ -12,8 +12,9 @@ MatchesDatabase.loadDatabase();
 const PlayersDatabase = new Datastore('PlayersDatastore.db');
 PlayersDatabase.loadDatabase();
 
-const dbCompactInterval = 300000
+const dbCompactInterval = 300000;
 const matchCloseSignupDelay = 0; //amount of time after match time to close sign-ups in milliseconds (300000 = 5 minutes)
+const MVP_ACE_VOTE_TIME = 600000;
 
 
 client.on('ready', () => {
@@ -79,8 +80,12 @@ function processCommand(receivedMessage) {
 				startMatchCommand(arguments, receivedMessage);
 				receivedMessage.delete();
 				break;
-			case "mvpa":
-				mvpaCommand(arguments, receivedMessage);
+			case "mvp":
+				mvpCommand(arguments, receivedMessage);
+				receivedMessage.delete();
+				break;
+			case "ace":
+				aceCommand(arguments, receivedMessage);
 				receivedMessage.delete();
 				break;
 			case "roles":
@@ -178,13 +183,6 @@ async function createMatch(arguments, receivedMessage) {
 				console.log("support selected from: " + user.id)
 				addUserToRole(msg, embedMessage, user, "support", receivedMessage);
 				break;
-				/*
-			case "❌":
-				console.log("cancel selected from: " + user.id)
-				removeUserFromAllRoles(msg, embedMessage, user, receivedMessage);
-				removeReactions(msg, user.id);
-				break;
-				*/
 			case "❓":
 				console.log("❓ selected from: " + user.id)
 				sendSelectedRoles(msg, user);
@@ -221,19 +219,6 @@ async function createMatch(arguments, receivedMessage) {
 				console.log("support removed from: " + user.id)
 				removeUserFromRole(msg, embedMessage, user, receivedMessage, "support");
 				break;
-			/*case "❌":
-				console.log("cancel selected from: " + user.id)
-				removeUserFromAllRoles(msg, embedMessage, user, receivedMessage);
-				removeReactions(msg, user.id);
-				break;
-			case "❓":
-				console.log("❓ selected from: " + user.id)
-				sendSelectedRoles(msg, user);
-				if (user.id != client.id) {
-					removeReaction(msg, user.id, '❓');
-				}
-				break;
-				*/
 			default:
 				console.log("something went wrong with collecting remove reactions")
 				break;
@@ -309,7 +294,10 @@ async function startMatchCommand(arguments, receivedMessage) {
 		//output user error message here
 		return;
 	}
-
+	//console.log()
+	if (!isUserMatchCreator(receivedMessage.author, matchID)) {
+		return;
+	}
 	if (arguments.length == 3) {
 		let timeRe = new RegExp('^(([0]?[1-9]|1[0-2])(:)([0-5][0-9]))$');
 		if (!timeRe.test(arguments[1])) {
@@ -333,6 +321,7 @@ async function startMatchCommand(arguments, receivedMessage) {
 		.setDescription("Processing Teams...")
 		//.setFooter("")
 		.setThumbnail("https://i.imgur.com/YeRFD2H.png")
+		.setFooter("Click on a team number to assign a win, 🛑 when match is over")
 
 	const msg = await receivedMessage.channel.send(embedMessage);
 
@@ -389,10 +378,10 @@ async function startMatchCommand(arguments, receivedMessage) {
 
 	msg.react('1️⃣')
 		.then(() => msg.react('2️⃣'))
-		.then(() => msg.react('❌'))
+		.then(() => msg.react('🛑'))
 		.catch(() => console.error('One of the emojis failed to react.'));
 
-	const filter = (reaction, user) => { return ['1️⃣', '2️⃣', '❌'].includes(reaction.emoji.name) && user.id != client.user.id };
+	const filter = (reaction, user) => { return ['1️⃣', '2️⃣', '🛑'].includes(reaction.emoji.name) && user.id != client.user.id };
 	const collector = msg.createReactionCollector(filter, {});
 	collector.on('collect', (reaction, user) => {
 		MatchesDatabase.findOne({ match_id: matchID }, async function (err, data) {
@@ -420,10 +409,11 @@ async function startMatchCommand(arguments, receivedMessage) {
 						removeReaction(msg, user.id, '2️⃣');
 					}
 					break;
-				case "❌":
-					console.log("❌ selected from: " + user.id)
+				case "🛑":
+					console.log("🛑 selected from: " + user.id)
 					if (user.id == data.creator_id) {
-						msg.delete();
+						msg.reactions.removeAll();
+						collector.stop();
 					}
 					break;
 				default:
@@ -481,15 +471,378 @@ async function teamLose(msg, matchID, playersIdArray) {
 	compactDatabases();
 }
 
-async function mvpaCommand(arguments, receivedMessage) {
+async function mvpCommand(arguments, receivedMessage) {
+	let authorID = receivedMessage.author.id;
+	let matchID;
+	if (checkIfStringIsValidInt(arguments[0])) {
+		matchID = parseInt(arguments[0]);
+	}
+	else {
+		console.log("invalid match id");
+		//output user error message here
+		return;
+	}
+	if (!isUserMatchCreator(receivedMessage.author, matchID)) {
+		return;
+	}
+	let teamNumber;
+	if (checkIfStringIsValidInt(arguments[1])) {
+		teamNumber = parseInt(arguments[1]);
+	}
+	else {
+		console.log("invalid team #");
+		//output user error message here
+		return;
+	}
+	const embedMessage = new Discord.MessageEmbed()
+		.setAuthor("In-House Bot | Match ID: " + matchID)
+		.setTitle("Vote for the MVP 🏅")
+		.setDescription("Processing Teams...")
+		.setThumbnail("https://i.imgur.com/YeRFD2H.png")
+		.setFooter("Vote for the MVP(s)")
 
+	const msg = await receivedMessage.channel.send(embedMessage);
+
+	mvpAceDescription(msg, embedMessage, matchID, teamNumber)
+
+	msg.react('1️⃣')
+		.then(() => msg.react('2️⃣'))
+		.then(() => msg.react('3️⃣'))
+		.then(() => msg.react('4️⃣'))
+		.then(() => msg.react('5️⃣'))
+		.then(() => msg.react('🛑'))
+		.catch(() => console.error('One of the emojis failed to react.'));
+
+	let player1VoteCount = 0;
+	let player2VoteCount = 0;
+	let player3VoteCount = 0;
+	let player4VoteCount = 0;
+	let player5VoteCount = 0;
+
+	const filter = (reaction, user) => { return ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '🛑'].includes(reaction.emoji.name) && user.id != client.user.id };
+	const collector = msg.createReactionCollector(filter, { time: MVP_ACE_VOTE_TIME, dispose: true });
+
+	collector.on('collect', (reaction, user) => {
+			switch (reaction.emoji.name) {
+				case "🛑":
+					console.log("🛑 selected from: " + user.id)
+					if (user.id == authorID) {
+						//msg.reactions.removeAll();
+						collector.stop();
+					}
+					else{
+						removeReaction(msg, user.id, '🛑');
+					}
+					break;
+				default:
+					break;
+			}
+	});
+
+	collector.on('end', collected => {
+		const userReactions = msg.reactions.cache;
+		userReactions.forEach(msgReaction => {
+			switch (msgReaction.emoji.name) {
+				case "1️⃣":
+						player1VoteCount = msgReaction.count;
+					break;
+				case "2️⃣":
+						player2VoteCount = msgReaction.count;
+					break;
+				case "3️⃣":
+						player3VoteCount = msgReaction.count;
+					break;
+				case "4️⃣":
+						player4VoteCount = msgReaction.count;
+					break;
+				case "5️⃣":
+						player5VoteCount = msgReaction.count;
+					break;
+			}
+		})
+		let playerVoteCountArray = [player1VoteCount,player2VoteCount,player3VoteCount,player4VoteCount,player5VoteCount];
+		playerVoteCountArray.sort(function(a, b){return b-a});
+		let mvpArray = [];
+		let maxVote = playerVoteCountArray[0];
+		if(maxVote <= 1){
+			return;
+		}
+		try {
+			MatchesDatabase.findOne({ match_id: matchID }, async function (err, data) {
+				if (data == null) {
+					console.log("no data found")
+				}
+				else {
+					let playersIdArray;
+					if (teamNumber == 1) {
+						playersIdArray = data.team1;
+					}
+					else if (teamNumber == 2) {
+						playersIdArray = data.team2;
+					}
+					if (playersIdArray.length != 5) {
+						return;
+					}
+					if(player1VoteCount == maxVote){
+						mvpArray.push(playersIdArray[0]);
+					}
+					if(player2VoteCount == maxVote){
+						mvpArray.push(playersIdArray[1]);
+					}
+					if(player3VoteCount == maxVote){
+						mvpArray.push(playersIdArray[2]);
+					}
+					if(player4VoteCount == maxVote){
+						mvpArray.push(playersIdArray[3]);
+					}
+					if(player5VoteCount == maxVote){
+						mvpArray.push(playersIdArray[4]);
+					}
+					mvpArray.forEach(mvpID =>{
+						PlayersDatabase.findOne({player_id: mvpID}, async function (err, data){
+							if(data==null){
+								PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 0, loss: 0, win_rate: 1.0, winteam: [], loseteam: [], number_of_mvp: 1, number_of_ace: 0 });
+							}
+							else{
+								PlayersDatabase.update({ player_id: mvpID }, { $inc: { number_of_mvp: 1 } }, { multi: false }, function (err, numReplaced) { });
+							}
+						})
+					})
+					if(mvpArray.length>1){
+						embedMessage.setTitle("MVPs 🏅")
+						let mvpNickNames = "";
+						var i;
+						for (i = 0; i < mvpArray.length; i++){
+							let userNickname = await getUserNickName(msg, mvpArray[i]);
+							mvpNickNames += "**" + userNickname + "**\n";
+						}
+						embedMessage.setDescription("\n" + mvpNickNames);
+					}
+					else if (mvpArray.length == 1){
+						embedMessage.setTitle("MVP 🏅")
+						let userNickname = await getUserNickName(msg, mvpArray[0]);
+						embedMessage.setDescription("\n**"  + userNickname + "**")
+						
+					}
+					embedMessage.setFooter("")
+					msg.edit(embedMessage);
+					
+				}
+			});
+		}
+		catch {
+			console.log("error");
+			return;
+		}
+	});
+
+}
+
+async function aceCommand(arguments, receivedMessage) {
+	let authorID = receivedMessage.author.id;
+	let matchID;
+	if (checkIfStringIsValidInt(arguments[0])) {
+		matchID = parseInt(arguments[0]);
+	}
+	else {
+		console.log("invalid match id");
+		//output user error message here
+		return;
+	}
+	if (!isUserMatchCreator(receivedMessage.author, matchID)) {
+		return;
+	}
+	let teamNumber;
+	if (checkIfStringIsValidInt(arguments[1])) {
+		teamNumber = parseInt(arguments[1]);
+	}
+	else {
+		console.log("invalid team #");
+		//output user error message here
+		return;
+	}
+	const embedMessage = new Discord.MessageEmbed()
+		.setAuthor("In-House Bot | Match ID: " + matchID)
+		.setTitle("Vote for the ACE 🥈")
+		.setDescription("Processing Teams...")
+		.setThumbnail("https://i.imgur.com/YeRFD2H.png")
+		.setFooter("Vote for the ACE(s)")
+
+	const msg = await receivedMessage.channel.send(embedMessage);
+
+	mvpAceDescription(msg, embedMessage, matchID, teamNumber)
+
+	msg.react('1️⃣')
+		.then(() => msg.react('2️⃣'))
+		.then(() => msg.react('3️⃣'))
+		.then(() => msg.react('4️⃣'))
+		.then(() => msg.react('5️⃣'))
+		.then(() => msg.react('🛑'))
+		.catch(() => console.error('One of the emojis failed to react.'));
+
+	let player1VoteCount = 0;
+	let player2VoteCount = 0;
+	let player3VoteCount = 0;
+	let player4VoteCount = 0;
+	let player5VoteCount = 0;
+
+	const filter = (reaction, user) => { return ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '🛑'].includes(reaction.emoji.name) && user.id != client.user.id };
+	const collector = msg.createReactionCollector(filter, { time: MVP_ACE_VOTE_TIME, dispose: true });
+
+	collector.on('collect', (reaction, user) => {
+			switch (reaction.emoji.name) {
+				case "🛑":
+					console.log("🛑 selected from: " + user.id)
+					if (user.id == authorID) {
+						//msg.reactions.removeAll();
+						collector.stop();
+					}
+					else{
+						removeReaction(msg, user.id, '🛑');
+					}
+					break;
+				default:
+					break;
+			}
+	});
+
+	collector.on('end', collected => {
+		const userReactions = msg.reactions.cache;
+		userReactions.forEach(msgReaction => {
+			switch (msgReaction.emoji.name) {
+				case "1️⃣":
+						player1VoteCount = msgReaction.count;
+					break;
+				case "2️⃣":
+						player2VoteCount = msgReaction.count;
+					break;
+				case "3️⃣":
+						player3VoteCount = msgReaction.count;
+					break;
+				case "4️⃣":
+						player4VoteCount = msgReaction.count;
+					break;
+				case "5️⃣":
+						player5VoteCount = msgReaction.count;
+					break;
+			}
+		})
+		let playerVoteCountArray = [player1VoteCount,player2VoteCount,player3VoteCount,player4VoteCount,player5VoteCount];
+		playerVoteCountArray.sort(function(a, b){return b-a});
+		let aceArray = [];
+		let maxVote = playerVoteCountArray[0];
+		if(maxVote <= 1){
+			return;
+		}
+		try {
+			MatchesDatabase.findOne({ match_id: matchID }, async function (err, data) {
+				if (data == null) {
+					console.log("no data found")
+				}
+				else {
+					let playersIdArray;
+					if (teamNumber == 1) {
+						playersIdArray = data.team1;
+					}
+					else if (teamNumber == 2) {
+						playersIdArray = data.team2;
+					}
+					if (playersIdArray.length != 5) {
+						return;
+					}
+					if(player1VoteCount == maxVote){
+						aceArray.push(playersIdArray[0]);
+					}
+					if(player2VoteCount == maxVote){
+						aceArray.push(playersIdArray[1]);
+					}
+					if(player3VoteCount == maxVote){
+						aceArray.push(playersIdArray[2]);
+					}
+					if(player4VoteCount == maxVote){
+						aceArray.push(playersIdArray[3]);
+					}
+					if(player5VoteCount == maxVote){
+						aceArray.push(playersIdArray[4]);
+					}
+					aceArray.forEach(aceID =>{
+						PlayersDatabase.findOne({player_id: aceID}, async function (err, data){
+							if(data==null){
+								PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 0, loss: 0, win_rate: 1.0, winteam: [], loseteam: [], number_of_mvp: 0, number_of_ace: 1 });
+							}
+							else{
+								PlayersDatabase.update({ player_id: aceID }, { $inc: { number_of_ace: 1 } }, { multi: false }, function (err, numReplaced) { });
+							}
+						})
+					})
+					
+					if(aceArray.length>1){
+						embedMessage.setTitle("ACEs 🥈")
+						let aceNickNames = "";
+						var i;
+						for (i = 0; i < aceArray.length; i++){
+							let userNickname = await getUserNickName(msg, aceArray[i]);
+							aceNickNames += "**" + userNickname + "**\n";
+						}
+						embedMessage.setDescription("\n" + aceNickNames);
+					}
+					else if (aceArray.length == 1){
+						embedMessage.setTitle("ACE 🥈")
+						let userNickname = await getUserNickName(msg, aceArray[0]);
+						embedMessage.setDescription("\n**"  + userNickname + "**")
+					}
+					embedMessage.setFooter("")
+					msg.edit(embedMessage);
+				}
+			});
+		}
+		catch {
+			console.log("error");
+			return;
+		}
+	});
+
+}
+
+function mvpAceDescription(msg, embedMessage, matchID, teamNumber) {
+	try {
+		MatchesDatabase.findOne({ match_id: matchID }, async function (err, data) {
+			if (data == null) {
+				console.log("no data found")
+			}
+			else {
+				let emojiList = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
+				let playersIdArray;
+				if (teamNumber == 1) {
+					playersIdArray = data.team1;
+				}
+				else if (teamNumber == 2) {
+					playersIdArray = data.team2;
+				}
+				if (playersIdArray.length != 5) {
+					return;
+				}
+				let embedDescription = "";
+				var i;
+				for (i = 0; i < 5; i++) {
+					embedDescription += emojiList[i] + " | " + await getUserNickName(msg, playersIdArray[i]) + "\n";
+				}
+				embedMessage.setDescription(embedDescription);
+				msg.edit(embedMessage);
+			}
+		});
+	}
+	catch {
+		console.log("Error updating mvpAce description");
+		return;
+	}
 }
 
 function sendDMToPlayers(usersIdArray, matchID, matchDate) {
 	const rolesArray = ["Top", "Jungle", "Mid", "Bot", "Support"];
 	var i;
 	for (i = 0; i < usersIdArray.length; i++) {
-		client.users.cache.get(usersIdArray[i]).send("**Match ID: " + matchID + "** starting at " + matchDate.toLocaleTimeString([], { timeStyle: 'short' }) + "! You are assigned to play: **" + rolesArray[i] + "**");
+		//client.users.cache.get(usersIdArray[i]).send("**Match ID: " + matchID + "** starting at " + matchDate.toLocaleTimeString([], { timeStyle: 'short' }) + "! You are assigned to play: **" + rolesArray[i] + "**");
 	}
 
 }
@@ -801,8 +1154,8 @@ async function removeUserFromRole(msg, embedMessage, user, receivedMessage, role
 						if (!(isUserInArray(user, data.top) || isUserInArray(user, data.jungle) || isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support))) {
 							MatchesDatabase.update({ message_id: msg.id }, { $set: { top: topArr, number_of_players: numPlayers - 1 } }, { multi: false });
 						}
-						else{
-							MatchesDatabase.update({ message_id: msg.id }, { $set: { top: topArr} }, { multi: false });
+						else {
+							MatchesDatabase.update({ message_id: msg.id }, { $set: { top: topArr } }, { multi: false });
 						}
 						updateEmbedDescription(msg, embedMessage, data.match_id);
 					}
@@ -813,10 +1166,10 @@ async function removeUserFromRole(msg, embedMessage, user, receivedMessage, role
 						updateDatabase = true;
 						jungleArr.splice(getIndexOfUserFromArray(user, jungleArr), 1)
 						let numPlayers = data.number_of_players;
-						if (!(isUserInArray(user, data.top) || isUserInArray(user, data.jungle) || isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support))){
+						if (!(isUserInArray(user, data.top) || isUserInArray(user, data.jungle) || isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support))) {
 							MatchesDatabase.update({ message_id: msg.id }, { $set: { jungle: jungleArr, number_of_players: numPlayers - 1 } }, { multi: false });
 						}
-						else{
+						else {
 							MatchesDatabase.update({ message_id: msg.id }, { $set: { jungle: jungleArr } }, { multi: false });
 						}
 						updateEmbedDescription(msg, embedMessage, data.match_id);
@@ -828,10 +1181,10 @@ async function removeUserFromRole(msg, embedMessage, user, receivedMessage, role
 						updateDatabase = true;
 						midArr.splice(getIndexOfUserFromArray(user, midArr), 1)
 						let numPlayers = data.number_of_players;
-						if (!(isUserInArray(user, data.top) || isUserInArray(user, data.jungle) || isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support))){
+						if (!(isUserInArray(user, data.top) || isUserInArray(user, data.jungle) || isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support))) {
 							MatchesDatabase.update({ message_id: msg.id }, { $set: { mid: midArr, number_of_players: numPlayers - 1 } }, { multi: false });
 						}
-						else{
+						else {
 							MatchesDatabase.update({ message_id: msg.id }, { $set: { mid: midArr } }, { multi: false });
 						}
 						updateEmbedDescription(msg, embedMessage, data.match_id);
@@ -843,10 +1196,10 @@ async function removeUserFromRole(msg, embedMessage, user, receivedMessage, role
 						updateDatabase = true;
 						botArr.splice(getIndexOfUserFromArray(user, botArr), 1)
 						let numPlayers = data.number_of_players;
-						if (!(isUserInArray(user, data.top) || isUserInArray(user, data.jungle) || isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support))){
+						if (!(isUserInArray(user, data.top) || isUserInArray(user, data.jungle) || isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support))) {
 							MatchesDatabase.update({ message_id: msg.id }, { $set: { bot: botArr, number_of_players: numPlayers - 1 } }, { multi: false });
 						}
-						else{
+						else {
 							MatchesDatabase.update({ message_id: msg.id }, { $set: { bot: botArr } }, { multi: false });
 						}
 						updateEmbedDescription(msg, embedMessage, data.match_id);
@@ -858,10 +1211,10 @@ async function removeUserFromRole(msg, embedMessage, user, receivedMessage, role
 						updateDatabase = true;
 						supportArr.splice(getIndexOfUserFromArray(user, supportArr), 1)
 						let numPlayers = data.number_of_players;
-						if (!(isUserInArray(user, data.top) || isUserInArray(user, data.jungle) || isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support))){
+						if (!(isUserInArray(user, data.top) || isUserInArray(user, data.jungle) || isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support))) {
 							MatchesDatabase.update({ message_id: msg.id }, { $set: { support: supportArr, number_of_players: numPlayers - 1 } }, { multi: false });
 						}
-						else{
+						else {
 							MatchesDatabase.update({ message_id: msg.id }, { $set: { support: supportArr } }, { multi: false });
 						}
 						updateEmbedDescription(msg, embedMessage, data.match_id);
@@ -951,16 +1304,16 @@ async function printUserRoles(arguments, receivedMessage) {
 
 	const msg = await receivedMessage.channel.send(embedMessage);
 	msg.react('🔄')
-	.then(() => msg.react('❌'))
-	.catch(() => console.error('One of the emojis failed to react.'));
+		.then(() => msg.react('❌'))
+		.catch(() => console.error('One of the emojis failed to react.'));
 
 
-	const filter = (reaction, user) => { return ['❌','🔄'].includes(reaction.emoji.name) && user.id != client.user.id };
+	const filter = (reaction, user) => { return ['❌', '🔄'].includes(reaction.emoji.name) && user.id != client.user.id };
 	const collector = msg.createReactionCollector(filter, {});
 	collector.on('collect', (reaction, user) => {
 		switch (reaction.emoji.name) {
 			case "❌":
-				if(user.id == authorID){
+				if (user.id == authorID) {
 					msg.delete();
 				}
 				removeReaction(msg, user.id, '❌');
@@ -1010,7 +1363,7 @@ async function printUserRoles(arguments, receivedMessage) {
 	*/
 }
 
-function updatePrintUserRoles(msg, embedMessage, matchID){
+function updatePrintUserRoles(msg, embedMessage, matchID) {
 	try {
 		MatchesDatabase.findOne({ match_id: matchID }, async function (err, data) {
 			if (data == null) {
@@ -1165,6 +1518,31 @@ function checkIfStringIsValidInt(input) {
 			return false
 		}
 	}
+}
+
+async function isUserMatchCreator(user, matchID) {
+	var isCreator = false;
+	try {
+		MatchesDatabase.findOne({ match_id: matchID }, function (err, data) {
+			if (data == null) {
+				console.log("no data found")
+			}
+			else {
+				if (user.id == data.creator_id) {
+					//console.log(isCreator);
+					isCreator = true;
+					//console.log(isCreator);
+				}
+			}
+		});
+		//console.log(isCreator);
+		return isCreator;
+	}
+	catch {
+		console.log("Error checking if user is match creator");
+		return false;
+	}
+
 }
 
 function isUserInArray(user, array) {
