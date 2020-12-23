@@ -842,7 +842,7 @@ function sendDMToPlayers(usersIdArray, matchID, matchDate) {
 	const rolesArray = ["Top", "Jungle", "Mid", "Bot", "Support"];
 	var i;
 	for (i = 0; i < usersIdArray.length; i++) {
-		//client.users.cache.get(usersIdArray[i]).send("**Match ID: " + matchID + "** starting at " + matchDate.toLocaleTimeString([], { timeStyle: 'short' }) + "! You are assigned to play: **" + rolesArray[i] + "**");
+		client.users.cache.get(usersIdArray[i]).send("**Match ID: " + matchID + "** starting at " + matchDate.toLocaleTimeString([], { timeStyle: 'short' }) + "! You are assigned to play: **" + rolesArray[i] + "**");
 	}
 
 }
@@ -1220,14 +1220,6 @@ async function removeUserFromRole(msg, embedMessage, user, receivedMessage, role
 						updateEmbedDescription(msg, embedMessage, data.match_id);
 					}
 				}
-				/*
-				if (updateDatabase) {
-					let numPlayers = data.number_of_players;
-					MatchesDatabase.update({ message_id: msg.id }, { $set: { top: topArr, jungle: jungleArr, mid: midArr, bot: botArr, support: supportArr, number_of_players: numPlayers - 1 } }, { multi: false });
-					updateEmbedDescription(msg, embedMessage, data.match_id);
-				}
-				*/
-
 			}
 		});
 
