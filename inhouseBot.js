@@ -1292,7 +1292,7 @@ async function printUserRoles(arguments, receivedMessage) {
 		.setTitle("Players for Match ID: " + arguments[0])
 		.setDescription("Processing Teams...")
 		.setFooter("Click on 🔄 to refresh players, ❌ to delete this message")
-		.setThumbnail("https://i.imgur.com/YeRFD2H.png")
+		//.setThumbnail("https://i.imgur.com/YeRFD2H.png")
 
 	const msg = await receivedMessage.channel.send(embedMessage);
 	msg.react('🔄')
@@ -1325,34 +1325,7 @@ async function printUserRoles(arguments, receivedMessage) {
 	});
 
 	updatePrintUserRoles(msg, embedMessage, matchID);
-	/*
-	try {
-		MatchesDatabase.findOne({ match_id: matchID }, async function (err, data) {
-			if (data == null) {
-				console.log("no data found")
-			}
-			else {
-				let printMessage = "";
-				let topArr = data.top;
-				let jungleArr = data.jungle;
-				let midArr = data.mid;
-				let botArr = data.bot;
-				let supportArr = data.support;
-				printMessage += "TOP: " + getUserNickNamesFromArray(topArr) + "\n";
-				printMessage += "JNG: " + getUserNickNamesFromArray(jungleArr) + "\n";
-				printMessage += "MID: " + getUserNickNamesFromArray(midArr) + "\n";
-				printMessage += "BOT: " + getUserNickNamesFromArray(botArr) + "\n";
-				printMessage += "SUP: " + getUserNickNamesFromArray(supportArr) + "\n";
-				embedMessage.setDescription("```" + printMessage + "```")
-				//receivedMessage.author.send();
-				msg.edit(embedMessage)
-			}
-		});
-	}
-	catch {
-		console.log("Error trying to print all players from match ID");
-	}
-	*/
+
 }
 
 function updatePrintUserRoles(msg, embedMessage, matchID) {
@@ -1368,6 +1341,7 @@ function updatePrintUserRoles(msg, embedMessage, matchID) {
 				let midArr = data.mid;
 				let botArr = data.bot;
 				let supportArr = data.support;
+				printMessage += "Number of Players: " + data.number_of_players + "/10\n\n";
 				printMessage += "TOP: " + getUserNickNamesFromArray(topArr) + "\n";
 				printMessage += "JNG: " + getUserNickNamesFromArray(jungleArr) + "\n";
 				printMessage += "MID: " + getUserNickNamesFromArray(midArr) + "\n";
@@ -1614,7 +1588,15 @@ function leaderboardCommand(arguments, receivedMessage) {
 				data.forEach(function (item) {
 					if (amt < limit) {
 						let winrateString = (Math.floor(item.win_rate * 100) + "%");
-						fields.push([amt + 1, item.nickname, (item.win + "W/" + item.loss + "L | " + winrateString), item.number_of_mvp, item.number_of_ace]);
+						let numMVP = "";
+						if(item.number_of_mvp != 0){
+							numMVP = item.number_of_mvp;
+						}
+						let numACE = ""
+						if(item.number_of_ace != 0){
+							numACE = item.number_of_ace;
+						}
+						fields.push([amt + 1, item.nickname, (item.win + "W/" + item.loss + "L | " + winrateString), numMVP, numACE]);
 						amt++;
 					}
 				});
