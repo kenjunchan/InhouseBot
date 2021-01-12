@@ -45,6 +45,8 @@ function listAllConnectedServersAndChannels() {
 
 }
 
+
+//processes the command to be run
 function processCommand(receivedMessage) {
 	let fullCommand = receivedMessage.content.substr(1) // Remove the leading exclamation mark
 	let splitCommand = fullCommand.split(" ") // Split the message up in to pieces for each space
@@ -1584,23 +1586,35 @@ function leaderboardCommand(arguments, receivedMessage) {
 		PlayersDatabase.find({}).sort({ win_rate: -1, number_of_mvp: -1, number_of_ace: -1 }).exec(function (err, data) {
 			if (data != null) {
 				let amt = 0;
-				fields = [["#", "Name", "W/L | %", "MVPs", "ACEs"]];
+				let tenIn = 0;
+				var fields = [["#", "Name", "W/L | %", "MVPs", "ACEs"]];
 				data.forEach(function (item) {
-					if (amt < limit) {
+
+					if (amt < limit && !(item.win + item.loss < 5)) {
 						let winrateString = (Math.floor(item.win_rate * 100) + "%");
 						let numMVP = "";
 						if(item.number_of_mvp != 0){
 							numMVP = item.number_of_mvp;
 						}
-						let numACE = ""
+						let numACE = "";
 						if(item.number_of_ace != 0){
 							numACE = item.number_of_ace;
 						}
 						fields.push([amt + 1, item.nickname, (item.win + "W/" + item.loss + "L | " + winrateString), numMVP, numACE]);
 						amt++;
+						tenIn++;
 					}
+
+					if(tenIn == 10){ //bug here
+						tenIn = 0;
+						receivedMessage.channel.send("```\n" + table.table(fields) + "\n```");
+						fields = [["#", "Name", "W/L | %", "MVPs", "ACEs"]];
+					}
+
 				});
-				receivedMessage.channel.send("```\n" + table.table(fields) + "\n```");
+				if(tenIn < 10){
+					receivedMessage.channel.send("```\n" + table.table(fields) + "\n```");
+				}
 			}
 			else {
 				receivedMessage.channel.send("DB error, perhaps it's empty?");
