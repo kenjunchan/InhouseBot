@@ -1612,7 +1612,7 @@ function leaderboardCommand(arguments, receivedMessage) {
 					}
 
 				});
-				if(tenIn < 10){
+				if(tenIn > 0){
 					receivedMessage.channel.send("```\n" + table.table(fields) + "\n```");
 				}
 			}
