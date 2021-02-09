@@ -18,9 +18,9 @@ const MVP_ACE_VOTE_TIME = 600000;
 
 
 client.on('ready', () => {
-	client.user.setActivity("DM me %help")
-	listAllConnectedServersAndChannels()
-	console.log("DiscordBot Started")
+	client.user.setActivity("DM me %help");
+	listAllConnectedServersAndChannels();
+	console.log("DiscordBot Started");
 	MatchesDatabase.persistence.setAutocompactionInterval(dbCompactInterval)
 	PlayersDatabase.persistence.setAutocompactionInterval(dbCompactInterval)
 })
@@ -1628,43 +1628,36 @@ function leaderboardCommand(arguments, receivedMessage) {
 	}
 }
 
-function statsCommand(arguments, receivedMessage) {
-	//!stats
-	//console.log("stats command ran")
+async function statsCommand(arguments, receivedMessage) {
 	PlayersDatabase.findOne({ player_id: receivedMessage.author.id }, async function (err, data) {
 		if (data == null) {
 			console.log("Player not found");
 			receivedMessage.channel.send("No stats available, if you think this is wrong please contact the administrators");
 		}
 		else {
-			
-			let winrateString = (Math.floor(data.win_rate * 100) + "%");
-			var msg = "```Stats for " + data.nickname + "\n";
-			msg += data.win + "W " + data.loss + "L\n";
-			msg += "Winrate | " + winrateString + "\n";
-			msg += "MVPs | " + data.number_of_mvp + "\n";
-			msg += "ACEs | " + data.number_of_ace + "\n";
-			msg += "=================================================\n"
-			//msg += "```";
-			
-			//const sentMsg = await receivedMessage.channel.send(msg);
-
 			let mergedwin = [].concat.apply([], data.winteam);
 			let mergedlose = [].concat.apply([], data.loseteam);
+
 			let players = await getPlayersWinrates(receivedMessage.author.id, mergedwin, mergedlose);
-			players.forEach(function(value, key) {
-				PlayersDatabase.findOne({player_id: key}, async function (err, player) {
-				   //console.log(player.nickname);
-				   //msg += (player.nickname + " " + value.wins + " " + value.loss);
-				   msg += player.nickname + " | " + value.wins + "W " + value.loss + "L ";
-				   console.log(player.nickname);
 
-
-					
-			   });
-			   //msg += (key + " " + value.wins + " " + value.loss);
-		   });
-		   console.log(msg);
+			PlayersDatabase.find({}, async function (err, playersData) {
+				let winrateString = (Math.floor(data.win_rate * 100) + "%");
+				var msg = "```Stats for " + data.nickname + "\n";
+				msg += data.win + "W " + data.loss + "L\n";
+				msg += "Winrate | " + winrateString + "\n";
+				msg += "MVPs | " + data.number_of_mvp + "\n";
+				msg += "ACEs | " + data.number_of_ace + "\n";
+				msg += "=============== Winrate With ===============\n"
+				players.forEach(async function (value, key) {
+					playersData.forEach(function(player){
+						if(key == player.player_id){
+							msg += player.nickname + " | " + value.wins + "W " + value.loss + "L\n";
+						}
+					});
+				});
+				msg += "```"
+				receivedMessage.author.send(msg);
+			});
 		}
 	});
 }
@@ -1672,26 +1665,24 @@ function statsCommand(arguments, receivedMessage) {
 async function getPlayersWinrates(pID, winteamArray, loseteamArray) {
 	var players = new Map();
 	winteamArray.forEach(id => {
-		//console.log(id);
-		if(id == pID){
+		if (id == pID) {
 		}
-		else if(players.has(id)){
-			players.set(id, {wins: players.get(id).wins + 1, loss: players.get(id).loss});
+		else if (players.has(id)) {
+			players.set(id, { wins: players.get(id).wins + 1, loss: players.get(id).loss });
 		}
 		else {
-			players.set(id, {wins: 1, loss: 0});
+			players.set(id, { wins: 1, loss: 0 });
 		}
 	});
 
 	loseteamArray.forEach(id => {
-		//console.log(id);
-		if(id == pID){
+		if (id == pID) {
 		}
-		else if(players.has(id)){
-			players.set(id, {wins: players.get(id).wins, loss: players.get(id).loss + 1});
+		else if (players.has(id)) {
+			players.set(id, { wins: players.get(id).wins, loss: players.get(id).loss + 1 });
 		}
 		else {
-			players.set(id, {wins: 0, loss: 1});
+			players.set(id, { wins: 0, loss: 1 });
 		}
 	});
 
@@ -1715,5 +1706,5 @@ async function compactDatabases() {
 }
 
 async function testCommand(arguments, receivedMessage) {
-	
+
 }
