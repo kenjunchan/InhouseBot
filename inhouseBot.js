@@ -104,7 +104,6 @@ function processCommand(receivedMessage) {
 				helpCommand(arguments, receivedMessage);
 				receivedMessage.delete();
 				break;
-
 			default:
 				receivedMessage.author.send("type %help to get the list of commands");
 				break;
@@ -427,6 +426,9 @@ async function startMatchCommand(arguments, receivedMessage) {
 
 	collector.on('end', collected => {
 		console.log("collection ended");
+		embedMessage.setFooter("Match Ended");
+		embedMessage.setTitle("");
+		msg.edit(embedMessage);
 	});
 }
 
@@ -437,7 +439,7 @@ async function teamWon(msg, matchID, playersIdArray) {
 				console.log("Player not found, adding to DB")
 				//let user = client.users.cache.get(playerID);
 				let userNickname = await getUserNickName(msg, playerID);
-				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 1, loss: 0, win_rate: 1.0, winteam: [playersIdArray], loseteam: [], number_of_mvp: 0, number_of_ace: 0 });
+				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, number_of_mvp: 0, number_of_ace: 0, win: 1, loss: 0, win_rate: 1.0, winteam: playersIdArray, loseteam: [] });
 			}
 			else {
 				let userNickname = await getUserNickName(msg, playerID);
@@ -458,11 +460,11 @@ async function teamLose(msg, matchID, playersIdArray) {
 			if (data == null) {
 				console.log("Player not found, adding to DB")
 				let userNickname = await getUserNickName(msg, playerID);
-				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 0, loss: 1, win_rate: 0.0, winteam: [], loseteam: [playersIdArray], number_of_mvp: 0, number_of_ace: 0 });
+				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, number_of_mvp: 0, number_of_ace: 0, win: 0, loss: 1, win_rate: 0.0, winteam: [], loseteam: playersIdArray });
 			}
 			else {
 				let userNickname = await getUserNickName(msg, playerID);
-				let playersArray = playersIdArray.concat(data.winteam);
+				let playersArray = playersIdArray.concat(data.loseteam);
 				let numberOfWins = data.win;
 				let numberOfLoss = (data.loss + 1);
 				let winrate = numberOfWins / (numberOfWins + numberOfLoss);
@@ -525,20 +527,20 @@ async function mvpCommand(arguments, receivedMessage) {
 	const collector = msg.createReactionCollector(filter, { time: MVP_ACE_VOTE_TIME, dispose: true });
 
 	collector.on('collect', (reaction, user) => {
-			switch (reaction.emoji.name) {
-				case "🛑":
-					console.log("🛑 selected from: " + user.id)
-					if (user.id == authorID) {
-						//msg.reactions.removeAll();
-						collector.stop();
-					}
-					else{
-						removeReaction(msg, user.id, '🛑');
-					}
-					break;
-				default:
-					break;
-			}
+		switch (reaction.emoji.name) {
+			case "🛑":
+				console.log("🛑 selected from: " + user.id)
+				if (user.id == authorID) {
+					//msg.reactions.removeAll();
+					collector.stop();
+				}
+				else {
+					removeReaction(msg, user.id, '🛑');
+				}
+				break;
+			default:
+				break;
+		}
 	});
 
 	collector.on('end', collected => {
@@ -546,27 +548,27 @@ async function mvpCommand(arguments, receivedMessage) {
 		userReactions.forEach(msgReaction => {
 			switch (msgReaction.emoji.name) {
 				case "1️⃣":
-						player1VoteCount = msgReaction.count;
+					player1VoteCount = msgReaction.count;
 					break;
 				case "2️⃣":
-						player2VoteCount = msgReaction.count;
+					player2VoteCount = msgReaction.count;
 					break;
 				case "3️⃣":
-						player3VoteCount = msgReaction.count;
+					player3VoteCount = msgReaction.count;
 					break;
 				case "4️⃣":
-						player4VoteCount = msgReaction.count;
+					player4VoteCount = msgReaction.count;
 					break;
 				case "5️⃣":
-						player5VoteCount = msgReaction.count;
+					player5VoteCount = msgReaction.count;
 					break;
 			}
 		})
-		let playerVoteCountArray = [player1VoteCount,player2VoteCount,player3VoteCount,player4VoteCount,player5VoteCount];
-		playerVoteCountArray.sort(function(a, b){return b-a});
+		let playerVoteCountArray = [player1VoteCount, player2VoteCount, player3VoteCount, player4VoteCount, player5VoteCount];
+		playerVoteCountArray.sort(function (a, b) { return b - a });
 		let mvpArray = [];
 		let maxVote = playerVoteCountArray[0];
-		if(maxVote <= 1){
+		if (maxVote <= 1) {
 			return;
 		}
 		try {
@@ -585,50 +587,50 @@ async function mvpCommand(arguments, receivedMessage) {
 					if (playersIdArray.length != 5) {
 						return;
 					}
-					if(player1VoteCount == maxVote){
+					if (player1VoteCount == maxVote) {
 						mvpArray.push(playersIdArray[0]);
 					}
-					if(player2VoteCount == maxVote){
+					if (player2VoteCount == maxVote) {
 						mvpArray.push(playersIdArray[1]);
 					}
-					if(player3VoteCount == maxVote){
+					if (player3VoteCount == maxVote) {
 						mvpArray.push(playersIdArray[2]);
 					}
-					if(player4VoteCount == maxVote){
+					if (player4VoteCount == maxVote) {
 						mvpArray.push(playersIdArray[3]);
 					}
-					if(player5VoteCount == maxVote){
+					if (player5VoteCount == maxVote) {
 						mvpArray.push(playersIdArray[4]);
 					}
-					mvpArray.forEach(mvpID =>{
-						PlayersDatabase.findOne({player_id: mvpID}, async function (err, data){
-							if(data==null){
+					mvpArray.forEach(mvpID => {
+						PlayersDatabase.findOne({ player_id: mvpID }, async function (err, data) {
+							if (data == null) {
 								PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 0, loss: 0, win_rate: 1.0, winteam: [], loseteam: [], number_of_mvp: 1, number_of_ace: 0 });
 							}
-							else{
+							else {
 								PlayersDatabase.update({ player_id: mvpID }, { $inc: { number_of_mvp: 1 } }, { multi: false }, function (err, numReplaced) { });
 							}
 						})
 					})
-					if(mvpArray.length>1){
+					if (mvpArray.length > 1) {
 						embedMessage.setTitle("MVPs 🏅")
 						let mvpNickNames = "";
 						var i;
-						for (i = 0; i < mvpArray.length; i++){
+						for (i = 0; i < mvpArray.length; i++) {
 							let userNickname = await getUserNickName(msg, mvpArray[i]);
 							mvpNickNames += "**" + userNickname + "**\n";
 						}
 						embedMessage.setDescription("\n" + mvpNickNames);
 					}
-					else if (mvpArray.length == 1){
+					else if (mvpArray.length == 1) {
 						embedMessage.setTitle("MVP 🏅")
 						let userNickname = await getUserNickName(msg, mvpArray[0]);
-						embedMessage.setDescription("\n**"  + userNickname + "**")
-						
+						embedMessage.setDescription("\n**" + userNickname + "**")
+
 					}
 					embedMessage.setFooter("")
 					msg.edit(embedMessage);
-					
+
 				}
 			});
 		}
@@ -692,20 +694,20 @@ async function aceCommand(arguments, receivedMessage) {
 	const collector = msg.createReactionCollector(filter, { time: MVP_ACE_VOTE_TIME, dispose: true });
 
 	collector.on('collect', (reaction, user) => {
-			switch (reaction.emoji.name) {
-				case "🛑":
-					console.log("🛑 selected from: " + user.id)
-					if (user.id == authorID) {
-						//msg.reactions.removeAll();
-						collector.stop();
-					}
-					else{
-						removeReaction(msg, user.id, '🛑');
-					}
-					break;
-				default:
-					break;
-			}
+		switch (reaction.emoji.name) {
+			case "🛑":
+				console.log("🛑 selected from: " + user.id)
+				if (user.id == authorID) {
+					//msg.reactions.removeAll();
+					collector.stop();
+				}
+				else {
+					removeReaction(msg, user.id, '🛑');
+				}
+				break;
+			default:
+				break;
+		}
 	});
 
 	collector.on('end', collected => {
@@ -713,27 +715,27 @@ async function aceCommand(arguments, receivedMessage) {
 		userReactions.forEach(msgReaction => {
 			switch (msgReaction.emoji.name) {
 				case "1️⃣":
-						player1VoteCount = msgReaction.count;
+					player1VoteCount = msgReaction.count;
 					break;
 				case "2️⃣":
-						player2VoteCount = msgReaction.count;
+					player2VoteCount = msgReaction.count;
 					break;
 				case "3️⃣":
-						player3VoteCount = msgReaction.count;
+					player3VoteCount = msgReaction.count;
 					break;
 				case "4️⃣":
-						player4VoteCount = msgReaction.count;
+					player4VoteCount = msgReaction.count;
 					break;
 				case "5️⃣":
-						player5VoteCount = msgReaction.count;
+					player5VoteCount = msgReaction.count;
 					break;
 			}
 		})
-		let playerVoteCountArray = [player1VoteCount,player2VoteCount,player3VoteCount,player4VoteCount,player5VoteCount];
-		playerVoteCountArray.sort(function(a, b){return b-a});
+		let playerVoteCountArray = [player1VoteCount, player2VoteCount, player3VoteCount, player4VoteCount, player5VoteCount];
+		playerVoteCountArray.sort(function (a, b) { return b - a });
 		let aceArray = [];
 		let maxVote = playerVoteCountArray[0];
-		if(maxVote <= 1){
+		if (maxVote <= 1) {
 			return;
 		}
 		try {
@@ -752,46 +754,46 @@ async function aceCommand(arguments, receivedMessage) {
 					if (playersIdArray.length != 5) {
 						return;
 					}
-					if(player1VoteCount == maxVote){
+					if (player1VoteCount == maxVote) {
 						aceArray.push(playersIdArray[0]);
 					}
-					if(player2VoteCount == maxVote){
+					if (player2VoteCount == maxVote) {
 						aceArray.push(playersIdArray[1]);
 					}
-					if(player3VoteCount == maxVote){
+					if (player3VoteCount == maxVote) {
 						aceArray.push(playersIdArray[2]);
 					}
-					if(player4VoteCount == maxVote){
+					if (player4VoteCount == maxVote) {
 						aceArray.push(playersIdArray[3]);
 					}
-					if(player5VoteCount == maxVote){
+					if (player5VoteCount == maxVote) {
 						aceArray.push(playersIdArray[4]);
 					}
-					aceArray.forEach(aceID =>{
-						PlayersDatabase.findOne({player_id: aceID}, async function (err, data){
-							if(data==null){
+					aceArray.forEach(aceID => {
+						PlayersDatabase.findOne({ player_id: aceID }, async function (err, data) {
+							if (data == null) {
 								PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, win: 0, loss: 0, win_rate: 1.0, winteam: [], loseteam: [], number_of_mvp: 0, number_of_ace: 1 });
 							}
-							else{
+							else {
 								PlayersDatabase.update({ player_id: aceID }, { $inc: { number_of_ace: 1 } }, { multi: false }, function (err, numReplaced) { });
 							}
 						})
 					})
-					
-					if(aceArray.length>1){
+
+					if (aceArray.length > 1) {
 						embedMessage.setTitle("ACEs 🥈")
 						let aceNickNames = "";
 						var i;
-						for (i = 0; i < aceArray.length; i++){
+						for (i = 0; i < aceArray.length; i++) {
 							let userNickname = await getUserNickName(msg, aceArray[i]);
 							aceNickNames += "**" + userNickname + "**\n";
 						}
 						embedMessage.setDescription("\n" + aceNickNames);
 					}
-					else if (aceArray.length == 1){
+					else if (aceArray.length == 1) {
 						embedMessage.setTitle("ACE 🥈")
 						let userNickname = await getUserNickName(msg, aceArray[0]);
-						embedMessage.setDescription("\n**"  + userNickname + "**")
+						embedMessage.setDescription("\n**" + userNickname + "**")
 					}
 					embedMessage.setFooter("")
 					msg.edit(embedMessage);
@@ -844,7 +846,7 @@ function sendDMToPlayers(usersIdArray, matchID, matchDate) {
 	const rolesArray = ["Top", "Jungle", "Mid", "Bot", "Support"];
 	var i;
 	for (i = 0; i < usersIdArray.length; i++) {
-		client.users.cache.get(usersIdArray[i]).send("**Match ID: " + matchID + "** starting at " + matchDate.toLocaleTimeString([], { timeStyle: 'short' }) + "! You are assigned to play: **" + rolesArray[i] + "**");
+		//client.users.cache.get(usersIdArray[i]).send("**Match ID: " + matchID + "** starting at " + matchDate.toLocaleTimeString([], { timeStyle: 'short' }) + "! You are assigned to play: **" + rolesArray[i] + "**");
 	}
 
 }
@@ -1294,7 +1296,7 @@ async function printUserRoles(arguments, receivedMessage) {
 		.setTitle("Players for Match ID: " + arguments[0])
 		.setDescription("Processing Teams...")
 		.setFooter("Click on 🔄 to refresh players, ❌ to delete this message")
-		//.setThumbnail("https://i.imgur.com/YeRFD2H.png")
+	//.setThumbnail("https://i.imgur.com/YeRFD2H.png")
 
 	const msg = await receivedMessage.channel.send(embedMessage);
 	msg.react('🔄')
@@ -1590,14 +1592,14 @@ function leaderboardCommand(arguments, receivedMessage) {
 				var fields = [["#", "Name", "W/L | %", "MVPs", "ACEs"]];
 				data.forEach(function (item) {
 
-					if (amt < limit && !(item.win + item.loss < 5)) {
+					if (amt < limit && !(item.win + item.loss < 4)) {
 						let winrateString = (Math.floor(item.win_rate * 100) + "%");
 						let numMVP = "";
-						if(item.number_of_mvp != 0){
+						if (item.number_of_mvp != 0) {
 							numMVP = item.number_of_mvp;
 						}
 						let numACE = "";
-						if(item.number_of_ace != 0){
+						if (item.number_of_ace != 0) {
 							numACE = item.number_of_ace;
 						}
 						fields.push([amt + 1, item.nickname, (item.win + "W/" + item.loss + "L | " + winrateString), numMVP, numACE]);
@@ -1605,14 +1607,14 @@ function leaderboardCommand(arguments, receivedMessage) {
 						tenIn++;
 					}
 
-					if(tenIn == 10){ //bug here
+					if (tenIn == 10) {
 						tenIn = 0;
 						receivedMessage.channel.send("```\n" + table.table(fields) + "\n```");
 						fields = [["#", "Name", "W/L | %", "MVPs", "ACEs"]];
 					}
 
 				});
-				if(tenIn > 0){
+				if (tenIn > 0) {
 					receivedMessage.channel.send("```\n" + table.table(fields) + "\n```");
 				}
 			}
@@ -1627,11 +1629,84 @@ function leaderboardCommand(arguments, receivedMessage) {
 }
 
 function statsCommand(arguments, receivedMessage) {
+	//!stats
+	//console.log("stats command ran")
+	PlayersDatabase.findOne({ player_id: receivedMessage.author.id }, async function (err, data) {
+		if (data == null) {
+			console.log("Player not found");
+			receivedMessage.channel.send("No stats available, if you think this is wrong please contact the administrators");
+		}
+		else {
+			
+			let winrateString = (Math.floor(data.win_rate * 100) + "%");
+			var msg = "```Stats for " + data.nickname + "\n";
+			msg += data.win + "W " + data.loss + "L\n";
+			msg += "Winrate | " + winrateString + "\n";
+			msg += "MVPs | " + data.number_of_mvp + "\n";
+			msg += "ACEs | " + data.number_of_ace + "\n";
+			msg += "=================================================\n"
+			//msg += "```";
+			
+			//const sentMsg = await receivedMessage.channel.send(msg);
 
-	if (arguments.length == 1) {
+			let mergedwin = [].concat.apply([], data.winteam);
+			let mergedlose = [].concat.apply([], data.loseteam);
+			let players = await getPlayersWinrates(receivedMessage.author.id, mergedwin, mergedlose);
+			players.forEach(function(value, key) {
+				PlayersDatabase.findOne({player_id: key}, async function (err, player) {
+				   //console.log(player.nickname);
+				   //msg += (player.nickname + " " + value.wins + " " + value.loss);
+				   msg += player.nickname + " | " + value.wins + "W " + value.loss + "L ";
+				   console.log(player.nickname);
 
+
+					
+			   });
+			   //msg += (key + " " + value.wins + " " + value.loss);
+		   });
+		   console.log(msg);
+		}
+	});
+}
+
+async function getPlayersWinrates(pID, winteamArray, loseteamArray) {
+	var players = new Map();
+	winteamArray.forEach(id => {
+		//console.log(id);
+		if(id == pID){
+		}
+		else if(players.has(id)){
+			players.set(id, {wins: players.get(id).wins + 1, loss: players.get(id).loss});
+		}
+		else {
+			players.set(id, {wins: 1, loss: 0});
+		}
+	});
+
+	loseteamArray.forEach(id => {
+		//console.log(id);
+		if(id == pID){
+		}
+		else if(players.has(id)){
+			players.set(id, {wins: players.get(id).wins, loss: players.get(id).loss + 1});
+		}
+		else {
+			players.set(id, {wins: 0, loss: 1});
+		}
+	});
+
+	return players;
+}
+
+function isPlayerInArray(playerArray, id) {
+	var found = false;
+	for (var i = 0; i < playerArray.length; i++) {
+		if (playerArray[i].id == id) {
+			found = true;
+			break;
+		}
 	}
-
+	return found;
 }
 
 async function compactDatabases() {
@@ -1640,7 +1715,5 @@ async function compactDatabases() {
 }
 
 async function testCommand(arguments, receivedMessage) {
-	//MatchesDatabase.persistence.compactDatafile();
-	//PlayersDatabase.persistence.compactDatafile();
-	//MatchesDatabase.insert({ match_id: 0, LAST_MATCH_ID: 0 });
+	
 }
