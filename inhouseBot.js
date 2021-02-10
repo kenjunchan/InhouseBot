@@ -18,7 +18,7 @@ const MVP_ACE_VOTE_TIME = 600000;
 
 
 client.on('ready', () => {
-	client.user.setActivity("DM me %help");
+	client.user.setActivity("GLHF");
 	listAllConnectedServersAndChannels();
 	console.log("DiscordBot Started");
 	MatchesDatabase.persistence.setAutocompactionInterval(dbCompactInterval)
@@ -64,31 +64,40 @@ function processCommand(receivedMessage) {
 				testCommand(arguments, receivedMessage);
 				break;
 			case "create":
-				if (receivedMessage.channel.type == "text") {
-					createMatch(arguments, receivedMessage);
-					break;
+				createMatch(arguments, receivedMessage);
+				if(receivedMessage.channel.type != "dm"){
+					receivedMessage.delete();
 				}
-				receivedMessage.author.send("Cannot create a match in DMs")
 				break;
 			case "players":
 				printUserRoles(arguments, receivedMessage);
-				receivedMessage.delete();
+				if(receivedMessage.channel.type != "dm"){
+					receivedMessage.delete();
+				}
 				break;
 			case "team":
 				teamCommand(arguments, receivedMessage);
-				receivedMessage.delete();
+				if(receivedMessage.channel.type != "dm"){
+					receivedMessage.delete();
+				}
 				break;
 			case "start":
 				startMatchCommand(arguments, receivedMessage);
-				receivedMessage.delete();
+				if(receivedMessage.channel.type != "dm"){
+					receivedMessage.delete();
+				}
 				break;
 			case "mvp":
 				mvpCommand(arguments, receivedMessage);
-				receivedMessage.delete();
+				if(receivedMessage.channel.type != "dm"){
+					receivedMessage.delete();
+				}
 				break;
 			case "ace":
 				aceCommand(arguments, receivedMessage);
-				receivedMessage.delete();
+				if(receivedMessage.channel.type != "dm"){
+					receivedMessage.delete();
+				}
 				break;
 			case "roles":
 				rolesCommand(arguments, receivedMessage);
@@ -98,11 +107,15 @@ function processCommand(receivedMessage) {
 				break;
 			case "leaderboard":
 				leaderboardCommand(arguments, receivedMessage);
-				receivedMessage.delete();
+				if(receivedMessage.channel.type != "dm"){
+					receivedMessage.delete();
+				}
 				break;
 			case "help":
 				helpCommand(arguments, receivedMessage);
-				receivedMessage.delete();
+				if(receivedMessage.channel.type != "dm"){
+					receivedMessage.delete();
+				}
 				break;
 			default:
 				receivedMessage.author.send("type %help to get the list of commands");
@@ -117,8 +130,13 @@ function helpCommand(arguments, receivedMessage) {
 }
 
 async function createMatch(arguments, receivedMessage) {
+	if (receivedMessage.channel.type === "dm") {
+		receivedMessage.author.send("Cannot create a match in DMs");
+		return;
+	}
 	if (!checkCreateMatchArguments(arguments, receivedMessage)) {
 		console.log("invalid arguments");
+		receivedMessage.author.send("invalid create match arguments");
 		return;
 	}
 	const embedMessage = new Discord.MessageEmbed()
@@ -133,7 +151,6 @@ async function createMatch(arguments, receivedMessage) {
 	else {
 		embedMessageTitle += "Serious In-House @ "
 	}
-	//time here "^(([0]?[1-9]|1[0-2])(:)([0-5][0-9]))$"
 	embedMessageTitle += arguments[1];
 	if (arguments[2] == "am") {
 		embedMessageTitle += " a.m."
@@ -153,8 +170,7 @@ async function createMatch(arguments, receivedMessage) {
 		.then(() => msg.react('❓'))
 		.catch(() => console.error('One of the emojis failed to react.'));
 
-	addMatchToDatabase(msg, embedMessage, arguments, receivedMessage)
-	receivedMessage.delete()
+	addMatchToDatabase(msg, embedMessage, arguments, receivedMessage);
 	let currentDate = new Date();
 	let matchTime = getDateFromHHMM(arguments[1], arguments[2]);
 	let timeOutTime = Math.abs(currentDate.getTime() - matchTime.getTime()) + matchCloseSignupDelay;
@@ -253,7 +269,7 @@ function teamCommand(arguments, receivedMessage) {
 	}
 	else {
 		console.log("invalid match id");
-		//output user error message here
+		receivedMessage.author.send("invalid match id with %team command");
 		return;
 	}
 	let teamNumber;
@@ -262,15 +278,16 @@ function teamCommand(arguments, receivedMessage) {
 	}
 	else {
 		console.log("invalid team #");
-		//output user error message here
+		receivedMessage.author.send("incalid team # with %team command");
 		return;
 	}
 	let usersArray = getArrayOfUsersFromMentions(arguments.slice(2));
 	if (usersArray.length != 5) {
 		console.log("invalid users array")
-		//output user error message here
+		receivedMessage.author.send("invalid users with %team command");
 		return;
 	}
+	receivedMessage.author.send("Successfully created team " + teamNumber + " for match ID: " + matchID);
 	let usersIdArray = [];
 	usersArray.forEach(user => usersIdArray.push(user.id));
 
@@ -284,6 +301,10 @@ function teamCommand(arguments, receivedMessage) {
 }
 
 async function startMatchCommand(arguments, receivedMessage) {
+	if (receivedMessage.channel.type === "dm") {
+		receivedMessage.author.send("Cannot start a match in DMs");
+		return;
+	}
 	let matchID;
 	let matchDate;
 	let newMatchTime = true;
@@ -292,11 +313,7 @@ async function startMatchCommand(arguments, receivedMessage) {
 	}
 	else {
 		console.log("invalid match id");
-		//output user error message here
-		return;
-	}
-	//console.log()
-	if (!isUserMatchCreator(receivedMessage.author, matchID)) {
+		receivedMessage.author.send("invalid match ID when running %start command");
 		return;
 	}
 	if (arguments.length == 3) {
@@ -320,9 +337,9 @@ async function startMatchCommand(arguments, receivedMessage) {
 	const embedMessage = new Discord.MessageEmbed()
 		.setAuthor("In-House Bot | Match ID: " + arguments[0])
 		.setDescription("Processing Teams...")
-		//.setFooter("")
 		.setThumbnail("https://i.imgur.com/YeRFD2H.png")
 		.setFooter("Click on a team number to assign a win, 🛑 when match is over")
+
 
 	const msg = await receivedMessage.channel.send(embedMessage);
 
@@ -331,17 +348,24 @@ async function startMatchCommand(arguments, receivedMessage) {
 			if (data == null) {
 				console.log("no data found")
 			}
+			else if (data.creator_id != receivedMessage.author.id) {
+				await msg.delete();
+				receivedMessage.author.send("Cannot start match ID: " + matchID + " since you are not the creator of the match");
+				return;
+			}
 			else {
 				let team1Arr = data.team1;
 				let team2Arr = data.team2;
 
 				if (team1Arr.length != 5) {
 					console.log("team 1 invalid");
+					receivedMessage.author.send("team 1 invalid for match ID: " + matchID);
 					msg.delete();
 					return;
 				}
 				else if (team2Arr.length != 5) {
 					console.log("team 2 invalid");
+					receivedMessage.author.send("team 2 invalid for match ID: " + matchID);
 					msg.delete();
 					return;
 				}
@@ -356,9 +380,12 @@ async function startMatchCommand(arguments, receivedMessage) {
 
 				if (!newMatchTime) {
 					matchDate = data.match_time;
-					//console.log(matchDate.toLocaleTimeString());
 				}
-				MatchesDatabase.update({ match_id: matchID }, { $set: { match_time: matchDate } }, { multi: false }, function (err, numReplaced) { console.log("Changed match time") });
+				else {
+					console.log("Changed match time");
+				}
+
+				MatchesDatabase.update({ match_id: matchID }, { $set: { match_time: matchDate } }, { multi: false }, function (err, numReplaced) { });
 				embedMessage.setTitle("Starting at: " + matchDate.toLocaleTimeString([], { timeStyle: 'short' }));
 				await msg.edit(embedMessage)
 				try {
@@ -377,6 +404,7 @@ async function startMatchCommand(arguments, receivedMessage) {
 		return;
 	}
 
+
 	msg.react('1️⃣')
 		.then(() => msg.react('2️⃣'))
 		.then(() => msg.react('🛑'))
@@ -392,6 +420,7 @@ async function startMatchCommand(arguments, receivedMessage) {
 			switch (reaction.emoji.name) {
 				case "1️⃣":
 					console.log("team 1 won selected from: " + user.id)
+					receivedMessage.author.send("Assigned team 1️⃣ a win for match ID: " + matchID);
 					if (user.id == data.creator_id && data.serious) {
 						teamWon(msg, matchID, data.team1);
 						teamLose(msg, matchID, data.team2);
@@ -402,6 +431,7 @@ async function startMatchCommand(arguments, receivedMessage) {
 					break;
 				case "2️⃣":
 					console.log("team 2 won selected from: " + user.id)
+					receivedMessage.author.send("Assigned team 2️⃣ a win for match ID: " + matchID);
 					if (user.id == data.creator_id && data.serious) {
 						teamWon(msg, matchID, data.team2);
 						teamLose(msg, matchID, data.team1);
@@ -413,8 +443,8 @@ async function startMatchCommand(arguments, receivedMessage) {
 				case "🛑":
 					console.log("🛑 selected from: " + user.id)
 					if (user.id == data.creator_id) {
-						msg.reactions.removeAll();
-						collector.stop();
+						msg.reactions.removeAll().catch();
+						collector.stop().catch();
 					}
 					break;
 				default:
@@ -430,6 +460,8 @@ async function startMatchCommand(arguments, receivedMessage) {
 		embedMessage.setTitle("");
 		msg.edit(embedMessage);
 	});
+
+
 }
 
 async function teamWon(msg, matchID, playersIdArray) {
@@ -486,9 +518,6 @@ async function mvpCommand(arguments, receivedMessage) {
 		//output user error message here
 		return;
 	}
-	if (!isUserMatchCreator(receivedMessage.author, matchID)) {
-		return;
-	}
 	let teamNumber;
 	if (checkIfStringIsValidInt(arguments[1])) {
 		teamNumber = parseInt(arguments[1]);
@@ -531,7 +560,7 @@ async function mvpCommand(arguments, receivedMessage) {
 			case "🛑":
 				console.log("🛑 selected from: " + user.id)
 				if (user.id == authorID) {
-					//msg.reactions.removeAll();
+					msg.reactions.removeAll();
 					collector.stop();
 				}
 				else {
@@ -577,6 +606,11 @@ async function mvpCommand(arguments, receivedMessage) {
 					console.log("no data found")
 				}
 				else {
+					if (data.creator_id != receivedMessage.author.id) {
+						await msg.delete();
+						receivedMessage.author.send("Cannot run MVP command for match ID: " + matchID + " since you are not the creator of the match");
+						return;
+					}
 					let playersIdArray;
 					if (teamNumber == 1) {
 						playersIdArray = data.team1;
@@ -651,9 +685,6 @@ async function aceCommand(arguments, receivedMessage) {
 	else {
 		console.log("invalid match id");
 		//output user error message here
-		return;
-	}
-	if (!isUserMatchCreator(receivedMessage.author, matchID)) {
 		return;
 	}
 	let teamNumber;
@@ -744,6 +775,11 @@ async function aceCommand(arguments, receivedMessage) {
 					console.log("no data found")
 				}
 				else {
+					if (data.creator_id != receivedMessage.author.id) {
+						await msg.delete();
+						receivedMessage.author.send("Cannot run ACE command for match ID: " + matchID + " since you are not the creator of the match");
+						return;
+					}
 					let playersIdArray;
 					if (teamNumber == 1) {
 						playersIdArray = data.team1;
@@ -846,7 +882,7 @@ function sendDMToPlayers(usersIdArray, matchID, matchDate) {
 	const rolesArray = ["Top", "Jungle", "Mid", "Bot", "Support"];
 	var i;
 	for (i = 0; i < usersIdArray.length; i++) {
-		//client.users.cache.get(usersIdArray[i]).send("**Match ID: " + matchID + "** starting at " + matchDate.toLocaleTimeString([], { timeStyle: 'short' }) + "! You are assigned to play: **" + rolesArray[i] + "**");
+		client.users.cache.get(usersIdArray[i]).send("**Match ID: " + matchID + "** starting at " + matchDate.toLocaleTimeString([], { timeStyle: 'short' }) + "! You are assigned to play: **" + rolesArray[i] + "**");
 	}
 
 }
@@ -985,29 +1021,6 @@ function getDateFromHHMM(HHMMInput, ampm) {
 		}
 	}
 	return date;
-}
-
-//function does not work
-function didPlayerSignup(msg, user) {
-	try {
-		let didPlayerSignupBoolean = false;
-		MatchesDatabase.findOne({ message_id: msg.id }, async function (err, data) {
-			if (data == null) {
-				console.log("no data found")
-			}
-			else {
-				if (isUserInArray(user, data.top) || isUserInArray(user, data.jungle)
-					|| isUserInArray(user, data.mid) || isUserInArray(user, data.bot) || isUserInArray(user, data.support)) {
-					didPlayerSignupBoolean = true;
-				}
-			}
-		});
-		console.log(didPlayerSignupBoolean);
-		return didPlayerSignupBoolean;
-	}
-	catch {
-		console.log("Error checking if player signed up");
-	}
 }
 
 async function addUserToRole(msg, embedMessage, user, role, receivedMessage) {
@@ -1296,7 +1309,6 @@ async function printUserRoles(arguments, receivedMessage) {
 		.setTitle("Players for Match ID: " + arguments[0])
 		.setDescription("Processing Teams...")
 		.setFooter("Click on 🔄 to refresh players, ❌ to delete this message")
-	//.setThumbnail("https://i.imgur.com/YeRFD2H.png")
 
 	const msg = await receivedMessage.channel.send(embedMessage);
 	msg.react('🔄')
@@ -1352,7 +1364,6 @@ function updatePrintUserRoles(msg, embedMessage, matchID) {
 				printMessage += "BOT: " + getUserNickNamesFromArray(botArr) + "\n";
 				printMessage += "SUP: " + getUserNickNamesFromArray(supportArr) + "\n";
 				embedMessage.setDescription("```" + printMessage + "```");
-				//receivedMessage.author.send();
 				msg.edit(embedMessage)
 			}
 		});
@@ -1492,27 +1503,33 @@ function checkIfStringIsValidInt(input) {
 
 async function isUserMatchCreator(user, matchID) {
 	var isCreator = false;
+	//console.log(matchID);
 	try {
-		MatchesDatabase.findOne({ match_id: matchID }, function (err, data) {
+		MatchesDatabase.findOne({ match_id: matchID }, async function (err, data) {
 			if (data == null) {
 				console.log("no data found")
 			}
 			else {
 				if (user.id == data.creator_id) {
-					//console.log(isCreator);
 					isCreator = true;
 					//console.log(isCreator);
 				}
 			}
 		});
-		//console.log(isCreator);
-		return isCreator;
+		//console.log(isCreator)
 	}
 	catch {
 		console.log("Error checking if user is match creator");
 		return false;
 	}
-
+	/*
+	console.log(isCreator)
+	return isCreator;
+	*/
+	setTimeout(function () {
+		//console.log(isCreator); // this will (probably) be defined, since nedb is fast & shouldn't take a full second
+		return (isCreator);
+	}, 1000);
 }
 
 function isUserInArray(user, array) {
@@ -1649,8 +1666,8 @@ async function statsCommand(arguments, receivedMessage) {
 				msg += "ACEs | " + data.number_of_ace + "\n";
 				msg += "=============== Winrate With ===============\n"
 				players.forEach(async function (value, key) {
-					playersData.forEach(function(player){
-						if(key == player.player_id){
+					playersData.forEach(function (player) {
+						if (key == player.player_id) {
 							msg += player.nickname + " | " + value.wins + "W " + value.loss + "L\n";
 						}
 					});
