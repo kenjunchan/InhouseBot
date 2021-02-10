@@ -1501,6 +1501,7 @@ function checkIfStringIsValidInt(input) {
 	}
 }
 
+//doesnt work
 async function isUserMatchCreator(user, matchID) {
 	var isCreator = false;
 	//console.log(matchID);
