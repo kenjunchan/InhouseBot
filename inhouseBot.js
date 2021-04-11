@@ -166,7 +166,6 @@ async function createMatch(arguments, receivedMessage) {
 		.then(() => msg.react('🇲'))
 		.then(() => msg.react('🇧'))
 		.then(() => msg.react('🇸'))
-		//.then(() => msg.react('❌'))
 		.then(() => msg.react('❓'))
 		.catch(() => console.error('One of the emojis failed to react.'));
 
@@ -469,7 +468,6 @@ async function teamWon(msg, matchID, playersIdArray) {
 		PlayersDatabase.findOne({ player_id: playerID }, async function (err, data) {
 			if (data == null) {
 				console.log("Player not found, adding to DB")
-				//let user = client.users.cache.get(playerID);
 				let userNickname = await getUserNickName(msg, playerID);
 				PlayersDatabase.insert({ player_id: playerID, nickname: userNickname, number_of_mvp: 0, number_of_ace: 0, win: 1, loss: 0, win_rate: 1.0, winteam: playersIdArray, loseteam: [] });
 			}
