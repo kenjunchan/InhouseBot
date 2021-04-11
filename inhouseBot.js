@@ -1588,9 +1588,15 @@ function getArrayOfUsersFromMentions(mentions, receivedMessage) {
 }
 
 function leaderboardCommand(arguments, receivedMessage) {
+
 	try {
+		let minGames = 2;
 		if (arguments[0] == "all") {
 			limit = Number.MAX_SAFE_INTEGER
+		}
+		else if (arguments[0] == "all1") {
+			limit = Number.MAX_SAFE_INTEGER
+			minGames = 0;
 		}
 		else if (arguments[0] == null) {
 			limit = 10;
@@ -1610,7 +1616,7 @@ function leaderboardCommand(arguments, receivedMessage) {
 				var fields = [["#", "Name", "W/L | %", "MVPs", "ACEs"]];
 				data.forEach(function (item) {
 
-					if (amt < limit && !(item.win + item.loss < 4)) {
+					if (amt < limit && !(item.win + item.loss < minGames)) {
 						let winrateString = (Math.floor(item.win_rate * 100) + "%");
 						let numMVP = "";
 						if (item.number_of_mvp != 0) {
